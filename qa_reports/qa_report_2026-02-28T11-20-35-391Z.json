@@ -1,0 +1,271 @@
+{
+  "timestamp": "2026-02-28T11:27:35.217Z",
+  "health": {
+    "endpoint": "/health",
+    "status": 200,
+    "latencyMs": 87,
+    "pass": true
+  },
+  "frontend": {
+    "endpoint": "/",
+    "status": 200,
+    "latencyMs": 27,
+    "pass": true
+  },
+  "functional": [
+    {
+      "label": "Hello World",
+      "status": 504,
+      "latencyMs": 89647,
+      "pass": false
+    },
+    {
+      "label": "Fibonacci(30)",
+      "status": 504,
+      "latencyMs": 89658,
+      "pass": false
+    },
+    {
+      "label": "Bubble Sort 1000",
+      "status": 504,
+      "latencyMs": 89582,
+      "pass": false
+    }
+  ],
+  "loadResults": [
+    {
+      "testName": "Smoke Test",
+      "concurrency": 1,
+      "totalRequests": 5,
+      "successCount": 0,
+      "errorCount": 5,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 0.06,
+      "durationMs": 85705,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    },
+    {
+      "testName": "Light Load (10 VU)",
+      "concurrency": 10,
+      "totalRequests": 50,
+      "successCount": 0,
+      "errorCount": 50,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 6.03,
+      "durationMs": 8290,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    },
+    {
+      "testName": "Medium Load (50 VU)",
+      "concurrency": 50,
+      "totalRequests": 250,
+      "successCount": 0,
+      "errorCount": 250,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 48.83,
+      "durationMs": 5120,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    },
+    {
+      "testName": "Heavy Load (100 VU)",
+      "concurrency": 100,
+      "totalRequests": 500,
+      "successCount": 0,
+      "errorCount": 500,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 49.26,
+      "durationMs": 10150,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    },
+    {
+      "testName": "Stress (200 VU)",
+      "concurrency": 200,
+      "totalRequests": 600,
+      "successCount": 0,
+      "errorCount": 600,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 38.64,
+      "durationMs": 15529,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    },
+    {
+      "testName": "Spike (500 VU)",
+      "concurrency": 500,
+      "totalRequests": 600,
+      "successCount": 0,
+      "errorCount": 600,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 0,
+      "errorRatePct": 100,
+      "throughputRPS": 114.23,
+      "durationMs": 5252,
+      "latency": {
+        "min": 0,
+        "max": 0,
+        "avg": 0,
+        "p50": 0,
+        "p90": 0,
+        "p95": 0,
+        "p99": 0
+      }
+    }
+  ],
+  "dockerStats": [
+    {
+      "name": "compiler-pgbouncer-1",
+      "cpu": "0.01%",
+      "mem": "2.008MiB / 128MiB",
+      "net": "1.52kB / 126B",
+      "block": "1.92MB / 0B"
+    },
+    {
+      "name": "compiler-db-1",
+      "cpu": "112.56%",
+      "mem": "35.84MiB / 2GiB",
+      "net": "1.78kB / 126B",
+      "block": "9.17MB / 8.19kB"
+    },
+    {
+      "name": "compiler-redis-1",
+      "cpu": "1.14%",
+      "mem": "3.84MiB / 700MiB",
+      "net": "1.95kB / 126B",
+      "block": "4.32MB / 0B"
+    },
+    {
+      "name": "clera_redis",
+      "cpu": "0.28%",
+      "mem": "338.5MiB / 3.767GiB",
+      "net": "303kB / 132kB",
+      "block": "137MB / 251MB"
+    },
+    {
+      "name": "clera_pgvector",
+      "cpu": "0.01%",
+      "mem": "22.67MiB / 3.767GiB",
+      "net": "1.61kB / 126B",
+      "block": "34MB / 127kB"
+    }
+  ],
+  "issues": [
+    {
+      "title": "Functional Test Failed: Hello World",
+      "severity": "🔴 Critical",
+      "area": "Compiler API",
+      "details": "POST /api/compiler/run returned HTTP 504",
+      "recommendation": "Check worker logs for executor errors. Ensure g++ is installed in worker image."
+    },
+    {
+      "title": "Functional Test Failed: Fibonacci(30)",
+      "severity": "🔴 Critical",
+      "area": "Compiler API",
+      "details": "POST /api/compiler/run returned HTTP 504",
+      "recommendation": "Check worker logs for executor errors. Ensure g++ is installed in worker image."
+    },
+    {
+      "title": "Functional Test Failed: Bubble Sort 1000",
+      "severity": "🔴 Critical",
+      "area": "Compiler API",
+      "details": "POST /api/compiler/run returned HTTP 504",
+      "recommendation": "Check worker logs for executor errors. Ensure g++ is installed in worker image."
+    },
+    {
+      "title": "High Error Rate at 1 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Smoke Test\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "High Error Rate at 10 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Light Load (10 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "High Error Rate at 50 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Medium Load (50 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "High Error Rate at 100 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Heavy Load (100 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "High Error Rate at 200 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Stress (200 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "High Error Rate at 500 VUs",
+      "severity": "🔴 Critical",
+      "area": "API / Infrastructure",
+      "details": "100% error rate during \"Spike (500 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    }
+  ]
+}

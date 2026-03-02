@@ -1,0 +1,400 @@
+{
+  "timestamp": "2026-02-28T08:07:07.544Z",
+  "health": {
+    "endpoint": "/health",
+    "status": 200,
+    "latencyMs": 167,
+    "pass": true
+  },
+  "frontend": {
+    "endpoint": "/",
+    "status": 200,
+    "latencyMs": 23,
+    "pass": true
+  },
+  "functional": [
+    {
+      "label": "Hello World",
+      "status": 200,
+      "latencyMs": 93,
+      "pass": true,
+      "output": "Hello World"
+    },
+    {
+      "label": "Fibonacci(30)",
+      "status": 200,
+      "latencyMs": 86,
+      "pass": true,
+      "output": "832040"
+    },
+    {
+      "label": "Bubble Sort 1000",
+      "status": 200,
+      "latencyMs": 85,
+      "pass": true,
+      "output": "1 1000"
+    }
+  ],
+  "loadResults": [
+    {
+      "testName": "Smoke Test",
+      "concurrency": 1,
+      "totalRequests": 5,
+      "successCount": 5,
+      "errorCount": 0,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 100,
+      "errorRatePct": 0,
+      "throughputRPS": 12.31,
+      "durationMs": 406,
+      "latency": {
+        "min": 65,
+        "max": 110,
+        "avg": 80,
+        "p50": 78,
+        "p90": 110,
+        "p95": 110,
+        "p99": 110
+      }
+    },
+    {
+      "testName": "Light Load (10 VU)",
+      "concurrency": 10,
+      "totalRequests": 50,
+      "successCount": 47,
+      "errorCount": 3,
+      "rateLimitedCount": 0,
+      "timeoutCount": 0,
+      "successRatePct": 94,
+      "errorRatePct": 6,
+      "throughputRPS": 0.84,
+      "durationMs": 59586,
+      "latency": {
+        "min": 14,
+        "max": 220,
+        "avg": 53,
+        "p50": 36,
+        "p90": 126,
+        "p95": 137,
+        "p99": 220
+      }
+    },
+    {
+      "testName": "Medium Load (50 VU)",
+      "concurrency": 50,
+      "totalRequests": 250,
+      "successCount": 55,
+      "errorCount": 3,
+      "rateLimitedCount": 192,
+      "timeoutCount": 0,
+      "successRatePct": 22,
+      "errorRatePct": 1.2,
+      "throughputRPS": 4.2,
+      "durationMs": 59570,
+      "latency": {
+        "min": 21,
+        "max": 339,
+        "avg": 126,
+        "p50": 131,
+        "p90": 197,
+        "p95": 214,
+        "p99": 339
+      }
+    },
+    {
+      "testName": "Heavy Load (100 VU)",
+      "concurrency": 100,
+      "totalRequests": 500,
+      "successCount": 54,
+      "errorCount": 3,
+      "rateLimitedCount": 443,
+      "timeoutCount": 0,
+      "successRatePct": 10.8,
+      "errorRatePct": 0.6,
+      "throughputRPS": 8.52,
+      "durationMs": 58705,
+      "latency": {
+        "min": 15,
+        "max": 167,
+        "avg": 60,
+        "p50": 49,
+        "p90": 124,
+        "p95": 142,
+        "p99": 167
+      }
+    },
+    {
+      "testName": "Stress (200 VU)",
+      "concurrency": 200,
+      "totalRequests": 600,
+      "successCount": 53,
+      "errorCount": 2,
+      "rateLimitedCount": 545,
+      "timeoutCount": 0,
+      "successRatePct": 8.8,
+      "errorRatePct": 0.3,
+      "throughputRPS": 10.15,
+      "durationMs": 59131,
+      "latency": {
+        "min": 16,
+        "max": 107,
+        "avg": 44,
+        "p50": 40,
+        "p90": 70,
+        "p95": 73,
+        "p99": 107
+      }
+    },
+    {
+      "testName": "Spike (500 VU)",
+      "concurrency": 500,
+      "totalRequests": 600,
+      "successCount": 56,
+      "errorCount": 7,
+      "rateLimitedCount": 537,
+      "timeoutCount": 0,
+      "successRatePct": 9.3,
+      "errorRatePct": 1.2,
+      "throughputRPS": 9.85,
+      "durationMs": 60939,
+      "latency": {
+        "min": 514,
+        "max": 3008,
+        "avg": 2312,
+        "p50": 2483,
+        "p90": 2640,
+        "p95": 2731,
+        "p99": 3008
+      }
+    }
+  ],
+  "dockerStats": [
+    {
+      "name": "compiler-api1-2",
+      "cpu": "0.00%",
+      "mem": "48.12MiB / 384MiB",
+      "net": "109kB / 152kB",
+      "block": "1.11MB / 4.1kB"
+    },
+    {
+      "name": "compiler-api1-1",
+      "cpu": "0.00%",
+      "mem": "46.88MiB / 384MiB",
+      "net": "109kB / 149kB",
+      "block": "8.19kB / 4.1kB"
+    },
+    {
+      "name": "compiler-api1-4",
+      "cpu": "0.00%",
+      "mem": "47.3MiB / 384MiB",
+      "net": "106kB / 138kB",
+      "block": "537kB / 4.1kB"
+    },
+    {
+      "name": "compiler-api1-3",
+      "cpu": "0.00%",
+      "mem": "46.48MiB / 384MiB",
+      "net": "106kB / 143kB",
+      "block": "311kB / 4.1kB"
+    },
+    {
+      "name": "compiler-api2-1",
+      "cpu": "0.00%",
+      "mem": "47.04MiB / 384MiB",
+      "net": "105kB / 137kB",
+      "block": "344kB / 4.1kB"
+    },
+    {
+      "name": "compiler-api2-2",
+      "cpu": "0.06%",
+      "mem": "46.25MiB / 384MiB",
+      "net": "104kB / 134kB",
+      "block": "0B / 4.1kB"
+    },
+    {
+      "name": "compiler-api2-3",
+      "cpu": "0.09%",
+      "mem": "46.52MiB / 384MiB",
+      "net": "106kB / 135kB",
+      "block": "16.4kB / 4.1kB"
+    },
+    {
+      "name": "compiler-api2-4",
+      "cpu": "0.08%",
+      "mem": "46.32MiB / 384MiB",
+      "net": "103kB / 131kB",
+      "block": "213kB / 4.1kB"
+    },
+    {
+      "name": "compiler-frontend-1",
+      "cpu": "0.00%",
+      "mem": "6.949MiB / 256MiB",
+      "net": "5.53kB / 2.52kB",
+      "block": "3.17MB / 16.4kB"
+    },
+    {
+      "name": "compiler-load_balancer-1",
+      "cpu": "0.00%",
+      "mem": "20.13MiB / 256MiB",
+      "net": "2.86MB / 2.71MB",
+      "block": "4.85MB / 16.4kB"
+    },
+    {
+      "name": "compiler-worker2-5",
+      "cpu": "0.00%",
+      "mem": "42.71MiB / 768MiB",
+      "net": "124kB / 353kB",
+      "block": "0B / 4.1kB"
+    },
+    {
+      "name": "compiler-worker1-4",
+      "cpu": "0.00%",
+      "mem": "42.47MiB / 768MiB",
+      "net": "120kB / 339kB",
+      "block": "0B / 4.1kB"
+    },
+    {
+      "name": "compiler-worker1-6",
+      "cpu": "0.00%",
+      "mem": "44.86MiB / 768MiB",
+      "net": "127kB / 361kB",
+      "block": "1.69MB / 4.1kB"
+    },
+    {
+      "name": "compiler-worker1-2",
+      "cpu": "0.00%",
+      "mem": "42.3MiB / 768MiB",
+      "net": "122kB / 347kB",
+      "block": "803kB / 4.1kB"
+    },
+    {
+      "name": "compiler-worker1-3",
+      "cpu": "0.00%",
+      "mem": "42.32MiB / 768MiB",
+      "net": "122kB / 351kB",
+      "block": "41kB / 365kB"
+    },
+    {
+      "name": "compiler-worker1-5",
+      "cpu": "0.06%",
+      "mem": "60.19MiB / 768MiB",
+      "net": "122kB / 354kB",
+      "block": "21.8MB / 168kB"
+    },
+    {
+      "name": "compiler-worker1-1",
+      "cpu": "0.00%",
+      "mem": "45.95MiB / 768MiB",
+      "net": "120kB / 348kB",
+      "block": "3.57MB / 45.1kB"
+    },
+    {
+      "name": "compiler-worker2-4",
+      "cpu": "0.00%",
+      "mem": "42.73MiB / 768MiB",
+      "net": "128kB / 357kB",
+      "block": "61.4kB / 4.1kB"
+    },
+    {
+      "name": "compiler-worker2-3",
+      "cpu": "0.07%",
+      "mem": "42.96MiB / 768MiB",
+      "net": "122kB / 349kB",
+      "block": "659kB / 315kB"
+    },
+    {
+      "name": "compiler-worker2-2",
+      "cpu": "0.06%",
+      "mem": "43.86MiB / 768MiB",
+      "net": "124kB / 355kB",
+      "block": "1.89MB / 266kB"
+    },
+    {
+      "name": "compiler-worker2-6",
+      "cpu": "0.27%",
+      "mem": "42.45MiB / 768MiB",
+      "net": "121kB / 349kB",
+      "block": "233kB / 127kB"
+    },
+    {
+      "name": "compiler-worker2-1",
+      "cpu": "0.00%",
+      "mem": "43.06MiB / 768MiB",
+      "net": "120kB / 347kB",
+      "block": "57.3kB / 36.9kB"
+    },
+    {
+      "name": "compiler-pgbouncer-1",
+      "cpu": "0.03%",
+      "mem": "2.992MiB / 128MiB",
+      "net": "9.33kB / 2.59kB",
+      "block": "4.17MB / 8.19kB"
+    },
+    {
+      "name": "compiler-db-1",
+      "cpu": "0.00%",
+      "mem": "166.7MiB / 2GiB",
+      "net": "8.93kB / 1.02kB",
+      "block": "13.9MB / 250kB"
+    },
+    {
+      "name": "compiler-redis-1",
+      "cpu": "1.10%",
+      "mem": "7.906MiB / 700MiB",
+      "net": "6.26MB / 2.88MB",
+      "block": "6.54MB / 0B"
+    },
+    {
+      "name": "clera_redis",
+      "cpu": "0.46%",
+      "mem": "374.5MiB / 3.767GiB",
+      "net": "303kB / 132kB",
+      "block": "137MB / 107MB"
+    },
+    {
+      "name": "clera_pgvector",
+      "cpu": "0.00%",
+      "mem": "28.3MiB / 3.767GiB",
+      "net": "1.61kB / 126B",
+      "block": "34MB / 127kB"
+    }
+  ],
+  "issues": [
+    {
+      "title": "High Error Rate at 10 VUs",
+      "severity": "🟡 Warning",
+      "area": "API / Infrastructure",
+      "details": "6% error rate during \"Light Load (10 VU)\" (excl. rate-limits & timeouts)",
+      "recommendation": "Check Nginx connection limits, Docker resource limits, and server logs."
+    },
+    {
+      "title": "Rate Limiting Triggered at 50 VUs",
+      "severity": "🟡 Warning",
+      "area": "API / Rate Limiter",
+      "details": "192 requests returned 429 during \"Medium Load (50 VU)\"",
+      "recommendation": "Use Redis-backed rate limiter for cross-instance consistency. Consider adjusting limits for legitimate concurrent users."
+    },
+    {
+      "title": "Rate Limiting Triggered at 100 VUs",
+      "severity": "🟡 Warning",
+      "area": "API / Rate Limiter",
+      "details": "443 requests returned 429 during \"Heavy Load (100 VU)\"",
+      "recommendation": "Use Redis-backed rate limiter for cross-instance consistency. Consider adjusting limits for legitimate concurrent users."
+    },
+    {
+      "title": "Rate Limiting Triggered at 200 VUs",
+      "severity": "🟡 Warning",
+      "area": "API / Rate Limiter",
+      "details": "545 requests returned 429 during \"Stress (200 VU)\"",
+      "recommendation": "Use Redis-backed rate limiter for cross-instance consistency. Consider adjusting limits for legitimate concurrent users."
+    },
+    {
+      "title": "Rate Limiting Triggered at 500 VUs",
+      "severity": "🟡 Warning",
+      "area": "API / Rate Limiter",
+      "details": "537 requests returned 429 during \"Spike (500 VU)\"",
+      "recommendation": "Use Redis-backed rate limiter for cross-instance consistency. Consider adjusting limits for legitimate concurrent users."
+    }
+  ]
+}

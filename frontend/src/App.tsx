@@ -1,0 +1,36 @@
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import Navbar from './components/layout/Navbar';
+import Lobby from './pages/Lobby';
+import Game from './pages/Game';
+import Admin from './pages/Admin';
+import Compiler from './pages/Compiler';
+import Leaderboard from './pages/Leaderboard';
+
+function AppInner() {
+  const { pathname } = useLocation();
+  const hideNav = pathname === '/admin_panel' || pathname === '/game' || pathname.startsWith('/leaderboard');
+  return (
+    <div className="app-container">
+      {!hideNav && <Navbar />}
+      <main className={hideNav ? 'main-content-full' : 'main-content'}>
+        <Routes>
+          <Route path="/" element={<Lobby />} />
+          <Route path="/game" element={<Game />} />
+          <Route path="/admin_panel" element={<Admin />} />
+          <Route path="/compiler" element={<Compiler />} />
+          <Route path="/leaderboard/:tournamentId" element={<Leaderboard />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppInner />
+    </BrowserRouter>
+  );
+}
+
+export default App;

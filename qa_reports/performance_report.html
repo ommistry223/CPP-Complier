@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeRunner — QA Performance Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0d14;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --surface3: #1f2d45;
+      --border: #1e2d45;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --orange: #f97316;
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.1);
+      --green-dim: rgba(16,185,129,0.1);
+      --yellow-dim: rgba(245,158,11,0.1);
+      --blue: #3b82f6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── BACKGROUND GRID ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; }
+
+    /* ─── HEADER ─── */
+    .header {
+      text-align: center;
+      padding: 60px 0 40px;
+    }
+    .header .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 800;
+      background: linear-gradient(135deg, #e2e8f0 0%, #a78bfa 60%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.15;
+      margin-bottom: 14px;
+    }
+    .header .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .header .subtitle span { display: flex; align-items: center; gap: 6px; }
+
+    /* ─── SECTION TITLE ─── */
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 20px;
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+    }
+    .section-title .number {
+      background: var(--accent);
+      color: #fff;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    section { margin-bottom: 48px; }
+
+    /* ─── CARDS ─── */
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .grid-6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+    .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
+    .card-value { font-size: 28px; font-weight: 800; }
+    .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+    .status-pass { color: var(--green); }
+    .status-fail { color: var(--red); }
+    .status-warn { color: var(--yellow); }
+
+    /* ─── STATUS PILL ─── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 100px;
+    }
+    .pill.pass  { background: var(--green-dim); color: var(--green); }
+    .pill.fail  { background: var(--red-dim); color: var(--red); }
+    .pill.warn  { background: var(--yellow-dim); color: var(--yellow); }
+
+    /* ─── METRIC ROW ─── */
+    .metric-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .metric-row:hover { border-color: var(--accent); }
+    .metric-row .left { display: flex; align-items: center; gap: 14px; }
+    .metric-row .icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .metric-row .label { font-size: 14px; font-weight: 500; }
+    .metric-row .sublabel { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ─── LOAD TEST BARS ─── */
+    .load-grid { display: flex; flex-direction: column; gap: 20px; }
+    .load-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 28px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .load-card:hover { border-color: var(--accent); transform: translateX(4px); }
+    .load-card.grade-a { border-left: 4px solid var(--green); }
+    .load-card.grade-b { border-left: 4px solid #22d3ee; }
+    .load-card.grade-c { border-left: 4px solid var(--yellow); }
+    .load-card.grade-d { border-left: 4px solid var(--orange); }
+    .load-card.grade-f { border-left: 4px solid var(--red); }
+
+    .load-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .load-name { font-size: 16px; font-weight: 700; }
+    .load-meta { display: flex; gap: 16px; flex-wrap: wrap; }
+    .load-meta span { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+    .load-meta strong { color: var(--text); }
+
+    .bar-group { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .bar-wrap { }
+    .bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+    .bar-label span { font-weight: 600; font-size: 12px; }
+    .bar-track { height: 8px; background: var(--surface2); border-radius: 100px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 100px; transition: width 1.2s cubic-bezier(.25,.8,.25,1); }
+    .bar-fill.success { background: linear-gradient(90deg, var(--green), #34d399); }
+    .bar-fill.error   { background: linear-gradient(90deg, var(--red), #f87171); }
+
+    .latency-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .lat-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .lat-chip .lat-key { color: var(--text-muted); font-size: 10px; display: block; }
+    .lat-chip .lat-val { color: var(--text); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+    /* ─── ISSUES ─── */
+    .issue-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 14px;
+      background: var(--surface);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0 20px;
+      align-items: start;
+      transition: border-color 0.2s;
+    }
+    .issue-card:hover { border-color: var(--accent); }
+    .issue-card.critical { border-left: 4px solid var(--red); }
+    .issue-card.warning  { border-left: 4px solid var(--yellow); }
+    .issue-num {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; flex-shrink: 0;
+    }
+    .issue-num.critical { background: var(--red-dim); color: var(--red); }
+    .issue-num.warning  { background: var(--yellow-dim); color: var(--yellow); }
+    .issue-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .issue-detail { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+    .issue-rec {
+      font-size: 12px;
+      color: #a5b4fc;
+      background: rgba(99,102,241,0.08);
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .issue-area-badge {
+      font-size: 11px; font-weight: 600;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 3px 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      height: fit-content;
+    }
+
+    /* ─── DOCKER GRID ─── */
+    .docker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    .docker-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      transition: border-color 0.2s;
+    }
+    .docker-card:hover { border-color: var(--accent); }
+    .docker-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: var(--accent2);
+      margin-bottom: 10px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .docker-stat { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+    .docker-stat .key { color: var(--text-muted); }
+    .docker-stat .val { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .cpu-bar { height: 4px; background: var(--surface2); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+    .cpu-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; }
+
+    /* ─── RECS ─── */
+    .rec-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      transition: border-color 0.2s;
+    }
+    .rec-card:hover { border-color: var(--accent); }
+    .rec-num {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; font-weight: 800; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .rec-text { font-size: 14px; line-height: 1.6; color: var(--text-muted); }
+    .rec-text strong { color: var(--text); }
+
+    /* ─── FOOTER ─── */
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ─── GRADE BADGE ─── */
+    .grade-badge {
+      font-size: 22px; font-weight: 900;
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .grade-A { background: rgba(16,185,129,0.15); color: var(--green); }
+    .grade-B { background: rgba(34,211,238,0.15); color: #22d3ee; }
+    .grade-C { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .grade-D { background: rgba(249,115,22,0.15); color: var(--orange); }
+    .grade-F { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    /* ─── SUMMARY STAT CARDS ─── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 48px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 18px;
+      text-align: center;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+    .stat-icon { font-size: 30px; margin-bottom: 10px; display: block; }
+    .stat-val { font-size: 26px; font-weight: 800; display: block; }
+    .stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block; }
+
+    @media (max-width: 600px) {
+      .bar-group { grid-template-columns: 1fr; }
+      .issue-card { grid-template-columns: auto 1fr; }
+      .issue-area-badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="badge">QA Performance Report</div>
+    <h1>CodeRunner Load &amp; Performance Analysis</h1>
+    <p class="subtitle">
+      <span>🕐 Generated: 2026-02-28 · 12:35 IST</span>
+      <span>🎯 Target: http://localhost</span>
+      <span>🤖 Tester: Antigravity QA Bot</span>
+    </p>
+  </header>
+
+  <!-- ─── EXECUTIVE SUMMARY ─── -->
+  <div class="summary-grid">
+    <div class="stat-card">
+      <span class="stat-icon">🩺</span>
+      <span class="stat-val status-fail">FAIL</span>
+      <span class="stat-lbl">Health Check</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🌐</span>
+      <span class="stat-val status-pass">PASS</span>
+      <span class="stat-lbl">Frontend</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">⚙️</span>
+      <span class="stat-val status-pass">3/3</span>
+      <span class="stat-lbl">Functional Tests</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🔥</span>
+      <span class="stat-val" style="color:var(--accent)">6</span>
+      <span class="stat-lbl">Load Scenarios</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">⚠️</span>
+      <span class="stat-val status-warn">6</span>
+      <span class="stat-lbl">Issues Found</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🐳</span>
+      <span class="stat-val" style="color:var(--blue)">26</span>
+      <span class="stat-lbl">Containers Running</span>
+    </div>
+  </div>
+
+  <!-- ─── SECTION 1: HEALTH ─── -->
+  <section>
+    <div class="section-title"><span class="number">1</span> Health &amp; Availability</div>
+    <div class="grid-2">
+      <div class="metric-row">
+        <div class="left">
+          <div class="icon" style="background:var(--red-dim)">🩺</div>
+          <div>
+            <div class="label"><code>/health</code></div>
+            <div class="sublabel">GET · 419ms · HTTP 404</div>
+          </div>
+        </div>
+        <span class="pill fail">❌ FAIL</span>
+      </div>
+      <div class="metric-row">
+        <div class="left">
+          <div class="icon" style="background:var(--green-dim)">🌐</div>
+          <div>
+            <div class="label"><code>/ (Frontend)</code></div>
+            <div class="sublabel">GET · 42ms · HTTP 200</div>
+          </div>
+        </div>
+        <span class="pill pass">✅ PASS</span>
+      </div>
+    </div>
+    <div style="margin-top:14px; padding:14px 18px; background:var(--red-dim); border:1px solid rgba(239,68,68,0.2); border-radius:12px; font-size:13px; color:#fca5a5;">
+      ⚠️ <strong style="color:#f87171">Root Cause:</strong> The <code>/health</code> endpoint is defined in the Express app but <strong>not proxied by Nginx</strong>. The nginx.conf only routes <code>/api/</code> and <code>/</code> — adding a <code>location /health</code> block pointing to the backend will fix this.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 2: FUNCTIONAL ─── -->
+  <section>
+    <div class="section-title"><span class="number">2</span> Functional Tests — Compiler API</div>
+    <div>
+      <div class="metric-row">
+        <div class="left">
+          <div class="icon" style="background:var(--green-dim)">👋</div>
+          <div>
+            <div class="label">Hello World</div>
+            <div class="sublabel">POST /api/compiler/run · C++ · 3049ms</div>
+          </div>
+        </div>
+        <span class="pill pass">✅ PASS</span>
+      </div>
+      <div class="metric-row">
+        <div class="left">
+          <div class="icon" style="background:var(--green-dim)">🔢</div>
+          <div>
+            <div class="label">Fibonacci(30) — Recursive</div>
+            <div class="sublabel">POST /api/compiler/run · C++ · 1327ms</div>
+          </div>
+        </div>
+        <span class="pill pass">✅ PASS</span>
+      </div>
+      <div class="metric-row">
+        <div class="left">
+          <div class="icon" style="background:var(--green-dim)">📊</div>
+          <div>
+            <div class="label">Bubble Sort (1000 elements)</div>
+            <div class="sublabel">POST /api/compiler/run · C++ · 1983ms</div>
+          </div>
+        </div>
+        <span class="pill pass">✅ PASS</span>
+      </div>
+    </div>
+    <div style="margin-top:12px; padding:12px 18px; background:var(--yellow-dim); border:1px solid rgba(245,158,11,0.2); border-radius:12px; font-size:13px; color:#fcd34d;">
+      ⚠️ <strong>Observation:</strong> First-run latency is high (Hello World: 3049ms) due to cold compilation + Docker tmpfs overhead. Subsequent jobs are faster.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 3: LOAD TESTS ─── -->
+  <section>
+    <div class="section-title"><span class="number">3</span> Load Test Results</div>
+    <div class="load-grid">
+
+      <!-- Smoke Test -->
+      <div class="load-card grade-a">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-A">A</div>
+            <div>
+              <div class="load-name">Smoke Test</div>
+              <div class="load-meta">
+                <span>👤 <strong>1 VU</strong></span>
+                <span>📨 <strong>5 req</strong></span>
+                <span>⚡ RPS: <strong>13.54</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill pass">Excellent</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--green)">100%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:100%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">0%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">70ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">95ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">95ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">95ms</span></div>
+        </div>
+      </div>
+
+      <!-- Light Load -->
+      <div class="load-card grade-b">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-B">B</div>
+            <div>
+              <div class="load-name">Light Load (10 VU)</div>
+              <div class="load-meta">
+                <span>👤 <strong>10 VUs</strong></span>
+                <span>📨 <strong>50 req</strong></span>
+                <span>⚡ RPS: <strong>0.84</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill warn">Good</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--green)">96%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:96%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">4%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:4%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">128ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">325ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">471ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">588ms</span></div>
+        </div>
+      </div>
+
+      <!-- Medium Load -->
+      <div class="load-card grade-c">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-C">C</div>
+            <div>
+              <div class="load-name">Medium Load (50 VU)</div>
+              <div class="load-meta">
+                <span>👤 <strong>50 VUs</strong></span>
+                <span>📨 <strong>250 req</strong></span>
+                <span>⚡ RPS: <strong>4.10</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill warn">Acceptable</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--yellow)">91.6%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:91.6%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">8.4%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:8.4%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">105ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">213ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">247ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">308ms</span></div>
+        </div>
+      </div>
+
+      <!-- Heavy Load -->
+      <div class="load-card grade-f">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-F">F</div>
+            <div>
+              <div class="load-name">Heavy Load (100 VU)</div>
+              <div class="load-meta">
+                <span>👤 <strong>100 VUs</strong></span>
+                <span>📨 <strong>500 req</strong></span>
+                <span>🚫 Rate-Limited: <strong style="color:var(--orange)">283</strong></span>
+                <span>⚡ RPS: <strong>8.32</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill fail">Critical</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--red)">36.4%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:36.4%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">7%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:7%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">42ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">85ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">114ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">234ms</span></div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--orange);background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:8px 12px;">
+          ⚠️ 56.6% of requests blocked by rate limiter (283/500). Low latency on <em>passing</em> requests indicates Nginx+API layer is healthy; the bottleneck is per-IP rate limiting.
+        </div>
+      </div>
+
+      <!-- Stress -->
+      <div class="load-card grade-f">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-F">F</div>
+            <div>
+              <div class="load-name">Stress Test (200 VU)</div>
+              <div class="load-meta">
+                <span>👤 <strong>200 VUs</strong></span>
+                <span>📨 <strong>600 req</strong></span>
+                <span>🚫 Rate-Limited: <strong style="color:var(--orange)">103</strong></span>
+                <span>⚡ RPS: <strong>9.41</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill fail">Critical</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--red)">72%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:72%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">10.8%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:10.8%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">108ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">302ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">483ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">809ms</span></div>
+        </div>
+      </div>
+
+      <!-- Spike -->
+      <div class="load-card grade-f">
+        <div class="load-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="grade-badge grade-F">F</div>
+            <div>
+              <div class="load-name">Spike Test (500 VU)</div>
+              <div class="load-meta">
+                <span>👤 <strong>500 VUs</strong></span>
+                <span>📨 <strong>600 req</strong></span>
+                <span>🚫 Rate-Limited: <strong style="color:var(--orange)">301</strong></span>
+                <span>⏱ Timeouts: <strong style="color:var(--red)">1</strong></span>
+                <span>⚡ RPS: <strong>9.63</strong></span>
+              </div>
+            </div>
+          </div>
+          <span class="pill fail">Critical</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-wrap">
+            <div class="bar-label">Success Rate <span style="color:var(--red)">9.7%</span></div>
+            <div class="bar-track"><div class="bar-fill success" style="width:9.7%"></div></div>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-label">Error Rate <span style="color:var(--red)">40%</span></div>
+            <div class="bar-track"><div class="bar-fill error" style="width:40%"></div></div>
+          </div>
+        </div>
+        <div class="latency-row">
+          <div class="lat-chip"><span class="lat-key">p50</span><span class="lat-val">927ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p90</span><span class="lat-val">4200ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p95</span><span class="lat-val">4205ms</span></div>
+          <div class="lat-chip"><span class="lat-key">p99</span><span class="lat-val">5691ms</span></div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--red);background:var(--red-dim);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:8px 12px;">
+          🔴 System near total overload at 500 VUs. 301 rate-limited + 240 errors. The 1 timeout indicates queue saturation. p99 latency of 5.7s is unacceptable for a compiler UX.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── SECTION 4: DOCKER STATS ─── -->
+  <section>
+    <div class="section-title"><span class="number">4</span> Docker Container Resource Usage</div>
+    <div class="docker-grid">
+      <!-- API Instances -->
+      <div class="docker-card"><div class="docker-name">compiler-api1-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.33%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">56.18 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.33%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api1-2</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.39%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">59.32 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.39%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api1-3</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.35%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">52.69 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.35%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api1-4</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">48.92 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api2-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.34%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">50.35 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.34%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api2-2</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">47.20 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api2-3</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.17%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">57.54 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.17%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-api2-4</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.55%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">56.72 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.55%"></div></div></div>
+      <!-- Workers -->
+      <div class="docker-card"><div class="docker-name">compiler-worker1-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">47.64 / 512 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-worker1-2</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">42.97 / 512 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-worker1-3</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.63%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">44.11 / 512 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.63%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-worker2-3</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.05%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val" style="color:var(--yellow)">66.97 / 512 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.05%"></div></div></div>
+      <!-- Infra -->
+      <div class="docker-card"><div class="docker-name">compiler-redis-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val" style="color:var(--yellow)">2.29%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">7.148 / 3.767 GiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:2.29%; background:linear-gradient(90deg,var(--yellow),var(--orange))"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-db-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">118.8 / 3.767 GiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-pgbouncer-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.03%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">2.477 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0.03%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-load_balancer-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">5.094 / 128 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+      <div class="docker-card"><div class="docker-name">compiler-frontend-1</div><div class="docker-stat"><span class="key">CPU</span><span class="val">0.00%</span></div><div class="docker-stat"><span class="key">Memory</span><span class="val">4.855 / 256 MiB</span></div><div class="cpu-bar"><div class="cpu-bar-fill" style="width:0%"></div></div></div>
+    </div>
+    <div style="margin-top:14px;font-size:13px;color:#4ade80;background:var(--green-dim);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:12px 18px;">
+      ✅ <strong>Good news:</strong> Resource utilization is very low post-test. CPU across all containers is under 3%. Memory usage is well within limits. Redis at 2.29% CPU is the most active infra component — expected given Bull queue activity.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 5: ISSUES ─── -->
+  <section>
+    <div class="section-title"><span class="number">5</span> Issues Found</div>
+
+    <div class="issue-card critical">
+      <div class="issue-num critical">1</div>
+      <div>
+        <div class="issue-title">🔴 Health Check Endpoint Not Exposed via Nginx</div>
+        <div class="issue-detail">GET /health → HTTP 404. The <code>/health</code> route exists in Express but nginx.conf has no proxy rule for it. Load balancers and monitoring tools can't reach it.</div>
+        <div class="issue-rec">💡 Add <code>location /health { proxy_pass http://backend_servers; }</code> to nginx.conf</div>
+      </div>
+      <div class="issue-area-badge">Infrastructure</div>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-num warning">2</div>
+      <div>
+        <div class="issue-title">🟡 8.4% Error Rate at 50 Concurrent Users</div>
+        <div class="issue-detail">During Medium Load (50 VU), 21/250 requests failed with non-200 responses and non-rate-limit causes. This hints at queue backlog building up.</div>
+        <div class="issue-rec">💡 Check worker Bull queue concurrency settings. WORKER_CONCURRENCY=2 per worker means only 24 jobs processed simultaneously across 12 workers.</div>
+      </div>
+      <div class="issue-area-badge">API / Workers</div>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-num critical">3</div>
+      <div>
+        <div class="issue-title">🔴 Rate Limiter Causing 56% Block Rate at 100 VUs</div>
+        <div class="issue-detail">283/500 requests were HTTP 429 at 100 VU load. Since all load test requests originate from localhost (same IP), the 100 req/60s per-IP limit fires almost immediately.</div>
+        <div class="issue-rec">💡 Real users = different IPs → real-world scenario is fine. But for load testing correctness and production multi-user correctness, use Redis-backed rate limiter with per-user token (JWT) keying instead of per-IP.</div>
+      </div>
+      <div class="issue-area-badge">Rate Limiter</div>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-num warning">4</div>
+      <div>
+        <div class="issue-title">🟡 Rate Limiting at 200 VUs (103 blocked)</div>
+        <div class="issue-detail">103 requests returned 429 during the Stress test at 200 VUs.</div>
+        <div class="issue-rec">💡 Same root cause as Issue 3. Rate limiter is per-IP and ephemeral per process.</div>
+      </div>
+      <div class="issue-area-badge">Rate Limiter</div>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-num critical">5</div>
+      <div>
+        <div class="issue-title">🔴 System Near Collapse at 500 VUs — 9.7% Success Rate</div>
+        <div class="issue-detail">Spike test: 301 rate-limited + 240 errors + 1 timeout. Only 58/600 requests succeeded. p99 latency of 5.7 seconds.</div>
+        <div class="issue-rec">💡 The combination of rate-limiting + queue saturation means the system cannot handle sudden spikes. Implement request queuing at the Nginx level, circuit breakers, or job prioritization.</div>
+      </div>
+      <div class="issue-area-badge">Scalability</div>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-num warning">6</div>
+      <div>
+        <div class="issue-title">🟡 1 Request Timeout at 500 VUs</div>
+        <div class="issue-detail">1 request exceeded the 60-second timeout threshold during the Spike test, indicating queue saturation at peak load.</div>
+        <div class="issue-rec">💡 Add a job timeout to the Bull queue configuration. Currently <code>job.finished()</code> blocks indefinitely.</div>
+      </div>
+      <div class="issue-area-badge">Workers / Queue</div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 6: ARCHITECTURE ─── -->
+  <section>
+    <div class="section-title"><span class="number">6</span> Architecture Snapshot</div>
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-label">API Layer</div>
+        <div class="card-value" style="color:var(--accent)">8</div>
+        <div class="card-sub">Replicas (api1×4 + api2×4)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Worker Layer</div>
+        <div class="card-value" style="color:var(--accent2)">12</div>
+        <div class="card-sub">Replicas (worker1×6 + worker2×6)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Job Capacity</div>
+        <div class="card-value" style="color:var(--green)">24</div>
+        <div class="card-sub">Concurrent jobs (2 per worker × 12)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">DB Pool</div>
+        <div class="card-value" style="color:var(--blue)">2000</div>
+        <div class="card-sub">PgBouncer max connections</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Redis Clients</div>
+        <div class="card-value" style="color:var(--yellow)">5000</div>
+        <div class="card-sub">maxclients configured</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Nginx Conns</div>
+        <div class="card-value" style="color:var(--orange)">1024</div>
+        <div class="card-sub">worker_connections (⚠️ low)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 7: RECOMMENDATIONS ─── -->
+  <section>
+    <div class="section-title"><span class="number">7</span> Recommendations</div>
+
+    <div class="rec-card">
+      <div class="rec-num">1</div>
+      <div class="rec-text"><strong>Fix Nginx Health Check Proxy</strong> — Add <code>location /health { proxy_pass http://backend_servers; }</code> to <code>nginx.conf</code>. This lets load balancers, Kubernetes probes, and uptime monitors verify backend health without bypassing Nginx.</div>
+    </div>
+
+    <div class="rec-card">
+      <div class="rec-num">2</div>
+      <div class="rec-text"><strong>Switch to Redis-Backed Rate Limiter</strong> — Replace the in-memory <code>express-rate-limit</code> with <code>rate-limit-redis</code> store. Key rate limits by JWT user ID or API key instead of IP to correctly handle multi-user load from the same origin.</div>
+    </div>
+
+    <div class="rec-card">
+      <div class="rec-num">3</div>
+      <div class="rec-text"><strong>Increase Nginx <code>worker_connections</code> to 4096–10000</strong> — Compiler jobs hold HTTP connections open while waiting for <code>job.finished()</code>. At 500+ concurrent users, 1024 connections will be exhausted. Update <code>nginx.conf</code>: <code>worker_connections 4096;</code></div>
+    </div>
+
+    <div class="rec-card">
+      <div class="rec-num">4</div>
+      <div class="rec-text"><strong>Add Bull Job Timeouts</strong> — Currently <code>job.finished()</code> can block indefinitely. Set a job timeout in Bull: <code>enqueueCompilerJob(..., { timeout: 30000 })</code> and return a meaningful error to the client instead of a silent hang or 60s timeout.</div>
+    </div>
+
+    <div class="rec-card">
+      <div class="rec-num">5</div>
+      <div class="rec-text"><strong>Replace Blocking <code>job.finished()</code> with WebSocket / SSE</strong> — The current pattern blocks an Express server thread per compilation request. At scale, use WebSocket or Server-Sent Events to push results asynchronously, freeing API server threads immediately after job enqueue.</div>
+    </div>
+
+    <div class="rec-card">
+      <div class="rec-num">6</div>
+      <div class="rec-text"><strong>Increase Worker Concurrency</strong> — <code>WORKER_CONCURRENCY=2</code> per worker = 24 total concurrent jobs. For a public compiler, consider increasing to 4–6 per worker (if host CPU allows), giving 48–72 parallel jobs and significantly reducing queue wait times under load.</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>🤖 Generated by <strong>Antigravity QA Bot</strong> · CodeRunner Performance Analysis · 2026-02-28T07:05:35Z</p>
+    <p style="margin-top:6px">Target: <code>http://localhost</code> · 26 containers · Node.js test runner (no external tools required)</p>
+  </footer>
+
+</div>
+
+<script>
+  // Animate bars on load
+  document.addEventListener('DOMContentLoaded', () => {
+    const fills = document.querySelectorAll('.bar-fill');
+    fills.forEach(f => {
+      const target = f.style.width;
+      f.style.width = '0%';
+      setTimeout(() => { f.style.width = target; }, 300);
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+testDir: 'tests'
+testFramework: 'jest'
