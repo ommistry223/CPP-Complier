@@ -5,23 +5,28 @@ const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
 
-// Supported language configuration (C++ ONLY)
+// Supported language configuration
 const LANGUAGES = {
   'cpp': {
     extension: '.cpp',
-    compileCmd: (file, out) => `g++ -O2 -std=c++17 -Wno-unused-result ${file} -o ${out}`,
+    compileCmd: (file, out) => `g++ -O2 -std=c++17 -Wno-unused-result "${file}" -o "${out}"`,
+    runCmd: (out) => `${out}`
+  },
+  'c': {
+    extension: '.c',
+    compileCmd: (file, out) => `gcc -O2 -std=c11 -Wno-unused-result "${file}" -o "${out}"`,
     runCmd: (out) => `${out}`
   }
 };
 
 class Executor {
   constructor(language, code, customTimeLimit, customMemoryLimit) {
-    this.language = 'cpp'; // Force C++
+    this.language = LANGUAGES[language] ? language : 'cpp';
     this.code = code;
     this.timeLimit = customTimeLimit || parseInt(process.env.MAX_EXECUTION_TIME) || 2000;
     this.memoryLimit = customMemoryLimit || parseInt(process.env.MAX_MEMORY_MB) || 256;
 
-    this.config = LANGUAGES['cpp'];
+    this.config = LANGUAGES[this.language];
     this.runId = uuidv4();
     this.baseDir = path.join(__dirname, '..', '..', 'temp', this.runId);
 
@@ -42,7 +47,7 @@ class Executor {
       // Use platform-agnostic naming for the binary
       this.executable = path.join(this.baseDir, 'solution.out');
 
-      logger.debug(`Environment prepared for ${this.runId} (C++)`);
+      logger.debug(`Environment prepared for ${this.runId} (${this.language.toUpperCase()})`);
     } catch (err) {
       logger.error('Failed to prepare execution environment:', err);
       throw new Error('System error preparing execution');
@@ -70,80 +75,91 @@ class Executor {
     });
   }
 
-  // Executes a batch of test cases
+  // Executes a single test case — used internally by runBatch
+  async _runOneTestCase(testCase, idx) {
+    const startTime = Date.now();
+    try {
+      const output = await this._runProcessWithInput(this.executable, [], testCase.input);
+      const timeElapsed = Date.now() - startTime;
+
+      const expected = testCase.expected_output.trim().split('\n').map(l => l.trim()).join('\n');
+      const actual   = output.trim().split('\n').map(l => l.trim()).join('\n');
+      const passed   = expected === actual;
+
+      return {
+        idx,
+        testCaseId: testCase.id,
+        status:     passed ? 'accepted' : 'wrong_answer',
+        time:       timeElapsed,
+        output,
+        input:          testCase.input,
+        expectedOutput: testCase.expected_output,
+      };
+    } catch (err) {
+      return {
+        idx,
+        testCaseId: testCase.id,
+        status:  err.status || 'runtime_error',
+        time:    Date.now() - startTime,
+        error:   err.message || 'Runtime error',
+        input:   testCase.input,
+      };
+    }
+  }
+
+  // Executes ALL test cases CONCURRENTLY (compile once, spawn all in parallel)
   async runBatch(testCases) {
-    const cmd = this.executable;
-    const args = [];
-
-    const results = [];
-    let passedCount = 0;
-    let maxTimeUsed = 0;
-    let maxMemoryUsed = 0;
-
-    for (const testCase of testCases) {
-      const startTime = Date.now();
-
-      try {
-        const output = await this._runProcessWithInput(cmd, args, testCase.input);
-        const timeElapsed = Date.now() - startTime;
-
-        maxTimeUsed = Math.max(maxTimeUsed, timeElapsed);
-
-        const expected = testCase.expected_output.trim().split('\n').map(l => l.trim()).join('\n');
-        const actual = output.trim().split('\n').map(l => l.trim()).join('\n');
-
-        if (expected === actual) {
-          results.push({ testCaseId: testCase.id, status: 'accepted', time: timeElapsed, output: output });
-          passedCount++;
-        } else {
-          results.push({ testCaseId: testCase.id, status: 'wrong_answer', time: timeElapsed });
-
-          let debugOutput = `--- Wrong Answer on Test Case ${passedCount + 1} ---\n\n`;
-          debugOutput += `[Input]\n${testCase.input.trim()}\n\n`;
-          debugOutput += `[Expected Output]\n${testCase.expected_output.trim()}\n\n`;
-          debugOutput += `[Your Output]\n${output.trim()}`;
-
-          return {
-            verdict: 'wrong_answer',
-            testCasesPassed: passedCount,
-            totalTestCases: testCases.length,
-            timeTaken: maxTimeUsed,
-            memoryUsed: maxMemoryUsed,
-            details: results,
-            error: debugOutput
-          };
-        }
-
-      } catch (err) {
-        const timeElapsed = Date.now() - startTime;
-        results.push({ testCaseId: testCase.id, status: err.status || 'runtime_error', time: timeElapsed });
-
-        let debugError = `--- ${err.status ? err.status.toUpperCase().replace(/_/g, ' ') : 'RUNTIME ERROR'} on Test Case ${passedCount + 1} ---\n\n`;
-        debugError += `[Input]\n${testCase.input.trim()}\n\n`;
-        debugError += `[Error Details]\n${err.message}`;
-
-        return {
-          verdict: err.status || 'runtime_error',
-          error: debugError,
-          testCasesPassed: passedCount,
-          totalTestCases: testCases.length,
-          timeTaken: timeElapsed,
-          memoryUsed: maxMemoryUsed,
-          details: results
-        };
-      }
+    if (!testCases || testCases.length === 0) {
+      return { verdict: 'accepted', testCasesPassed: 0, totalTestCases: 0, timeTaken: 0, memoryUsed: 0, details: [] };
     }
 
-    let successOutput = results.length > 0 ? `--- STDOUT (Sample Case 1) ---\n\n${results[0].output.trim() || '(No code output)'}` : null;
+    // ── CONCURRENT execution — all test cases run simultaneously ──
+    const results = await Promise.all(
+      testCases.map((tc, i) => this._runOneTestCase(tc, i))
+    );
 
+    const totalTestCases = testCases.length;
+    const passedCount    = results.filter(r => r.status === 'accepted').length;
+    const maxTime        = Math.max(...results.map(r => r.time));
+
+    // Find the first failure (sorted by index so report is deterministic)
+    const firstFail = results.find(r => r.status !== 'accepted');
+
+    if (firstFail) {
+      const tcNum   = firstFail.idx + 1;
+      const verdict = firstFail.status; // 'wrong_answer' | 'runtime_error' | 'time_limit_exceeded' etc.
+      let msg = `--- ${verdict.toUpperCase().replace(/_/g, ' ')} on Test Case ${tcNum} ---\n\n`;
+
+      if (verdict === 'wrong_answer') {
+        msg += `[Input]\n${firstFail.input.trim()}\n\n`;
+        msg += `[Expected Output]\n${firstFail.expectedOutput.trim()}\n\n`;
+        msg += `[Your Output]\n${(firstFail.output || '').trim()}`;
+      } else {
+        msg += `[Input]\n${firstFail.input.trim()}\n\n`;
+        msg += `[Error Details]\n${firstFail.error || 'No details available'}`;
+      }
+
+      return {
+        verdict,
+        testCasesPassed: passedCount,
+        totalTestCases,
+        timeTaken:  maxTime,
+        memoryUsed: 0,
+        details:    results,
+        error:      msg,
+      };
+    }
+
+    // All passed
+    const sampleOut = results[0]?.output?.trim() || '(No output)';
     return {
-      verdict: 'accepted',
+      verdict:         'accepted',
       testCasesPassed: passedCount,
-      totalTestCases: testCases.length,
-      timeTaken: maxTimeUsed,
-      memoryUsed: maxMemoryUsed,
-      details: results,
-      error: successOutput
+      totalTestCases,
+      timeTaken:  maxTime,
+      memoryUsed: 0,
+      details:    results,
+      error:      `--- All ${passedCount}/${totalTestCases} test cases passed ---\n\nSample Output (Case 1):\n${sampleOut}`,
     };
   }
 
@@ -159,10 +175,14 @@ class Executor {
         reject({ status: 'time_limit_exceeded', message: 'Time Limit Exceeded' });
       }, this.timeLimit);
 
+      // Suppress EPIPE: if the child closes stdin early, stdin.write() throws
+      // an unhandled 'error' event that would crash the worker process.
+      process.stdin.on('error', () => {});
+
       if (input) {
-        process.stdin.write(input);
+        try { process.stdin.write(input); } catch (_) { /* EPIPE — ignore */ }
       }
-      process.stdin.end();
+      try { process.stdin.end(); } catch (_) { /* EPIPE — ignore */ }
 
       process.stdout.on('data', (data) => {
         stdout += data.toString();
@@ -201,8 +221,8 @@ class Executor {
   }
 
   static hashFunction(code, language, problemId) {
-    // language is ignored as it is always C++
-    return crypto.createHash('sha256').update(`cpp:${problemId}:${code}`).digest('hex');
+    const lang = LANGUAGES[language] ? language : 'cpp';
+    return crypto.createHash('sha256').update(`${lang}:${problemId}:${code}`).digest('hex');
   }
 }
 

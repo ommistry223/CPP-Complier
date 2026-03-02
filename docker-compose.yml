@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: coderunner
     ports:
-      - "5433:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -39,26 +39,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-
-  api2:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=pgbouncer
-      - DB_PORT=5432
-      - DB_NAME=coderunner
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - REDIS_HOST=redis
-    depends_on:
-      pgbouncer:
-        condition: service_started
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
   load_balancer:
     image: nginx:alpine
@@ -67,23 +54,26 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - api1
-      - api2
+      api1:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
 
-  worker1:
+  worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
     command: npm run worker
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - DB_HOST=pgbouncer
       - DB_PORT=5432
       - DB_NAME=coderunner
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - REDIS_HOST=redis
-      - WORKER_CONCURRENCY=2
+      - WORKER_CONCURRENCY=16
     depends_on:
       pgbouncer:
         condition: service_started
@@ -91,28 +81,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-
-  worker2:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    command: npm run worker
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=pgbouncer
-      - DB_PORT=5432
-      - DB_NAME=coderunner
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - REDIS_HOST=redis
-      - WORKER_CONCURRENCY=2
-    depends_on:
-      pgbouncer:
-        condition: service_started
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+    restart: unless-stopped
 
   pgbouncer:
     image: edoburu/pgbouncer
@@ -134,8 +107,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    depends_on:
-      - load_balancer
 
 volumes:
   postgres_data:

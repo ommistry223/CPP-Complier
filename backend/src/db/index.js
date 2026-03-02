@@ -24,6 +24,7 @@ pool.on('error', (err) => {
   logger.error('PostgreSQL pool error:', err);
 });
 
+
 const query = async (text, params) => {
   const start = Date.now();
   try {
@@ -37,6 +38,103 @@ const query = async (text, params) => {
   }
 };
 
+const getProblems = async ({ published }) => {
+  const res = await query(
+    'SELECT * FROM problems WHERE is_published = $1 ORDER BY id ASC',
+    [published]
+  );
+  return res.rows;
+};
+
+// Returns ALL test cases for a problem (hidden + sample) — for server-side judging
+const getTestCases = async (problemId) => {
+  const res = await query(
+    'SELECT id, input, expected_output, is_sample, order_index FROM test_cases WHERE problem_id = $1 ORDER BY order_index ASC',
+    [problemId]
+  );
+  return res.rows;
+};
+
+// Returns only the sample (visible) test cases — safe to send to frontend
+const getSampleTestCases = async (problemId) => {
+  const res = await query(
+    'SELECT id, input, expected_output, order_index FROM test_cases WHERE problem_id = $1 AND is_sample = true ORDER BY order_index ASC',
+    [problemId]
+  );
+  return res.rows;
+};
+
+// Returns a single problem with its time/memory limits
+const getProblemById = async (problemId) => {
+  const res = await query(
+    'SELECT id, title, time_limit, memory_limit FROM problems WHERE id = $1',
+    [problemId]
+  );
+  return res.rows[0] || null;
+};
+
 const getClient = () => pool.connect();
 
-module.exports = { query, getClient, pool };
+// Admin: add a test case to a problem
+const addTestCase = async (problemId, { input, expected_output, is_sample, order_index }) => {
+  const res = await query(
+    `INSERT INTO test_cases (problem_id, input, expected_output, is_sample, order_index)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [problemId, input, expected_output, is_sample ?? true, order_index ?? 999]
+  );
+  return res.rows[0];
+};
+
+// Admin: delete a test case by ID
+const deleteTestCase = async (tcId) => {
+  await query('DELETE FROM test_cases WHERE id = $1', [tcId]);
+};
+
+// Admin: get all test cases (including hidden) for a problem
+const getAllTestCases = async (problemId) => {
+  const res = await query(
+    `SELECT id, input, expected_output, is_sample, order_index
+     FROM test_cases WHERE problem_id = $1 ORDER BY order_index ASC, id ASC`,
+    [problemId]
+  );
+  return res.rows;
+};
+
+// Ensure hints table exists (idempotent startup call)
+const ensureHintsTable = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS problem_hints (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      order_index INTEGER DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_problem_hints_problem ON problem_hints(problem_id);
+  `);
+};
+
+// Get all hints for a problem (ordered)
+const getHints = async (problemId) => {
+  const res = await query(
+    'SELECT id, content, order_index FROM problem_hints WHERE problem_id = $1 ORDER BY order_index ASC, created_at ASC',
+    [problemId]
+  );
+  return res.rows;
+};
+
+// Add a hint
+const addHint = async (problemId, content, orderIndex = 0) => {
+  const res = await query(
+    'INSERT INTO problem_hints (problem_id, content, order_index) VALUES ($1,$2,$3) RETURNING *',
+    [problemId, content, orderIndex]
+  );
+  return res.rows[0];
+};
+
+// Delete a hint
+const deleteHint = async (hintId) => {
+  await query('DELETE FROM problem_hints WHERE id = $1', [hintId]);
+};
+
+module.exports = { query, getClient, pool, getProblems, getTestCases, getSampleTestCases, getProblemById, addTestCase, deleteTestCase, getAllTestCases, ensureHintsTable, getHints, addHint, deleteHint };

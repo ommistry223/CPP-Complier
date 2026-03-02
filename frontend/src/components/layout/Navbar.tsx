@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
-import { Code2, User } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Code2, Swords } from 'lucide-react';
 import './Navbar.css';
 
-const Navbar = () => {
+const Navbar = () => {  // navigate not used here — Admin/Lobby handle their own routing
+    const { pathname } = useLocation();
     return (
         <nav className="navbar glass-panel">
             <div className="nav-container">
@@ -11,14 +12,9 @@ const Navbar = () => {
                     <span className="gradient-text brand-text">CodeRunner</span>
                 </Link>
                 <div className="nav-links">
-                    <Link to="/" className="nav-link active">
-                        <Code2 size={16} /> Online Compiler
+                    <Link to="/" className={`nav-link ${pathname === '/' ? 'active' : ''}`}>
+                        <Swords size={16} /> Join Arena
                     </Link>
-                </div>
-                <div className="nav-actions">
-                    <button className="btn btn-secondary user-btn">
-                        <User size={18} />
-                    </button>
                 </div>
             </div>
         </nav>

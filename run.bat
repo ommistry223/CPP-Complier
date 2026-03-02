@@ -1,32 +1,46 @@
 @echo off
+setlocal EnableDelayedExpansion
 color 0B
 echo ===================================================
-echo     CodeRunner Platform - Running Services
+echo     CODE ARENA  -  LAUNCH
 echo ===================================================
 echo.
-
-echo Ensure Redis Server (Port 6379) and PostgreSQL (Port 5432) are running!
+docker --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker is not installed or not in PATH.
+    echo Download Docker Desktop: https://www.docker.com/products/docker-desktop
+    pause
+    exit /b 1
+)
+echo [OK] Docker found.
+docker info >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker Desktop is not running.
+    echo Please start Docker Desktop and try again.
+    pause
+    exit /b 1
+)
+echo [OK] Docker Desktop is running.
 echo.
-pause
-
-echo Starting Backend API Server...
-cd backend
-start "API Server" cmd /k "npm start"
-
-timeout /t 2 /nobreak >nul
-
-echo Starting Worker Node...
-start "Worker Node" cmd /k "npm run worker"
-
-echo Starting Frontend UI...
-cd ..\frontend
-start "React UI" cmd /k "npm run dev"
-
-cd ..
+echo Starting CODE ARENA services...
+docker compose up -d
+if %errorlevel% neq 0 (
+    echo [ERROR] docker compose up failed. Run 'docker compose logs' for details.
+    pause
+    exit /b 1
+)
+echo.
+echo Waiting for services to be healthy...
+timeout /t 8 /nobreak >nul
+docker compose ps
 echo.
 echo ===================================================
-echo Services launched in separate windows!
-echo Keep all 3 CMD windows open.
-echo Platform URL: http://localhost:5173
+echo  CODE ARENA IS LIVE!
+echo ===================================================
+echo.
+echo   Platform:    http://localhost
+echo   Admin Panel: http://localhost/admin_panel
+echo.
+echo To stop: run stop-app.bat  (or: docker compose down)
 echo ===================================================
 pause

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import { Play, Loader2, Code2, Terminal } from 'lucide-react';
@@ -17,6 +17,39 @@ const Compiler = () => {
     const [time, setTime] = useState<number | null>(null);
     const [loadTestCount, setLoadTestCount] = useState<number>(1);
     const [averageTime, setAverageTime] = useState<number | null>(null);
+    const [questions, setQuestions] = useState<any[]>([]);
+    const [currentIdx, setCurrentIdx] = useState(0);
+    const [questionDesc, setQuestionDesc] = useState('');
+    const [apiError, setApiError] = useState<string | null>(null);
+    // Fetch questions from backend on mount
+    useEffect(() => {
+        axios.get('/api/problems?published=true')
+            .then(res => {
+                console.log('API response:', res.data);
+                setQuestions(res.data.problems || []);
+                setApiError(null);
+                if (res.data.problems && res.data.problems.length > 0) {
+                    setQuestionDesc(res.data.problems[0].description);
+                    setCode(DEFAULT_CODE['cpp']);
+                }
+            })
+            .catch(err => {
+                setApiError(err?.response?.data?.message || err.message || 'Failed to fetch questions');
+            });
+    }, []);
+
+    // Update question description when currentIdx changes
+    useEffect(() => {
+        if (questions.length > 0 && questions[currentIdx]) {
+            setQuestionDesc(questions[currentIdx].description);
+            setInput('');
+            setOutput('');
+            setStatus('idle');
+            setTime(null);
+            setAverageTime(null);
+            setCode(DEFAULT_CODE['cpp']);
+        }
+    }, [currentIdx, questions]);
 
     const handleLanguageChange = (e: any) => {
         const lang = e.target.value;
@@ -47,6 +80,10 @@ const Compiler = () => {
                     setStatus('success');
                     setOutput(res.data.output || '(No Output)');
                     setTime(res.data.time);
+                    // If solved, go to next question
+                    if (questions.length > 0 && currentIdx < questions.length - 1) {
+                        setTimeout(() => setCurrentIdx(currentIdx + 1), 1200);
+                    }
                 } else {
                     setStatus('error');
                     setOutput(res.data.output || 'Unknown Error Occurred');
@@ -73,10 +110,10 @@ const Compiler = () => {
                 let errorOccurred = false;
                 let sampleOutput = "";
 
-                results.forEach((res, index) => {
+                results.forEach((res) => {
                     if (res.data.status === 'success') {
-                        totalBackendTime += (res.data.time || 0);
-                        if (index === 0) sampleOutput = res.data.output;
+                        totalBackendTime += res.data.time || 0;
+                        sampleOutput = res.data.output;
                     } else {
                         errorOccurred = true;
                         sampleOutput = res.data.output;
@@ -103,8 +140,8 @@ const Compiler = () => {
     return (
         <div className="compiler-view">
             {/* Left Panel - Editor */}
-            <div className="panel editor-panel glass-panel">
-                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px' }}>
+            <div className="panel editor-panel glass-panel" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Code2 size={20} color="var(--neon-cyan)" />
                         <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Code Editor</h2>
@@ -143,6 +180,7 @@ const Compiler = () => {
                     </div>
                 </div>
 
+                {/* Monaco Editor fills remaining height */}
                 <div className="monaco-wrapper">
                     <Editor
                         height="100%"
@@ -161,44 +199,103 @@ const Compiler = () => {
                 </div>
             </div>
 
-            {/* Right Panel - Input / Output */}
+            {/* Right Panel - Info & Input / Output */}
             <div className="panel io-panel">
-                {/* Custom Input */}
-                <div className="io-box glass-panel">
-                    <div className="panel-header io-header">
-                        <Terminal size={18} color="var(--text-muted)" />
-                        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-muted)' }}>Custom Input (stdin)</h3>
-                    </div>
-                    <textarea
-                        className="io-textarea"
-                        placeholder="Type inputs here..."
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        spellCheck={false}
-                    ></textarea>
-                </div>
-
-                {/* Output */}
-                <div className="io-box glass-panel">
-                    <div className="panel-header io-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                {/* Problem Description Section */}
+                <div className="description-section glass-panel">
+                    <div className="description-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Terminal size={18} color="var(--text-heading)" />
-                            <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-heading)' }}>Output (stdout)</h3>
+                            <Code2 size={20} color="var(--neon-cyan)" />
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-heading)' }}>
+                                {questions[currentIdx]?.title || 'Problem Description'}
+                            </h3>
                         </div>
-                        {time !== null && (
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', gap: '16px' }}>
-                                {averageTime !== null && (
-                                    <span>Avg Backend Time: <span style={{ color: 'var(--neon-purple)', fontWeight: 'bold' }}>{averageTime} ms</span></span>
-                                )}
-                                <span>{loadTestCount > 1 ? 'Total API Time' : 'Time'}: <span style={{ color: 'var(--neon-cyan)', fontWeight: 'bold' }}>{time} ms</span></span>
-                            </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                className="btn btn-nav"
+                                disabled={currentIdx === 0}
+                                onClick={() => setCurrentIdx(currentIdx - 1)}
+                            >
+                                Previous
+                            </button>
+                            <button
+                                className="btn btn-nav"
+                                disabled={currentIdx === questions.length - 1}
+                                onClick={() => setCurrentIdx(currentIdx + 1)}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="description-scroll">
+                        {apiError ? (
+                            <div style={{ color: 'var(--accent-error)' }}>{apiError}</div>
+                        ) : questions.length === 0 ? (
+                            <div style={{ color: 'var(--neon-cyan)' }}>Loading problem details...</div>
+                        ) : (
+                            <div dangerouslySetInnerHTML={{ __html: questionDesc.replace(/\n/g, '<br/>') }} />
                         )}
                     </div>
-                    <div className={`io-output ${status === 'error' ? 'error' : ''}`}>
+                </div>
+
+                {/* Expected Output (Sample) */}
+                <div className="io-box glass-panel compact-io">
+                    <div className="io-container">
+                        <div className="io-label">
+                            <Terminal size={14} />
+                            <span>Expected Output (Sample)</span>
+                        </div>
+                        <div className="io-output expected-output">
+                            {questions[currentIdx]?.output_format || 'Check description for sample output'}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Custom Input */}
+                <div className="io-box glass-panel compact-io">
+                    <div className="io-container">
+                        <div className="io-label">
+                            <Terminal size={14} />
+                            <span>Custom Input (stdin)</span>
+                        </div>
+                        <textarea
+                            className="io-textarea"
+                            placeholder="Type input for your code..."
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            spellCheck={false}
+                        ></textarea>
+                    </div>
+                </div>
+
+                {/* Actual Output */}
+                <div className="io-box glass-panel compact-io">
+                    <div className="io-container">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 0 8px 0', alignItems: 'center' }}>
+                            <div className="io-label" style={{ margin: 0 }}>
+                                <Terminal size={14} />
+                                <span>Actual Output (stdout)</span>
+                            </div>
+                            {time !== null && (
+                                <div style={{ display: 'flex' }}>
+                                    {averageTime !== null && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--neon-purple)', marginRight: '8px' }}>
+                                            Avg: {averageTime} ms
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        {time} ms
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className={`io-output ${status === 'error' ? 'error' : ''}`} style={{ margin: '0 10px 10px 10px' }}>
                         {output ? (
-                            <pre>{output}</pre>
+                            <pre style={{ margin: 0 }}>{output}</pre>
                         ) : (
-                            <div className="console-empty text-muted">Output will be displayed here</div>
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>Run code to see output</div>
                         )}
                     </div>
                 </div>

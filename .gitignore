@@ -16,6 +16,12 @@ frontend/dist/
 backend/dist/
 backend/temp/
 
+# Runtime state files (contain live room/admin codes — never commit)
+backend/rooms.json
+
+# Build artifacts
+frontend/build_error.txt
+
 # Database / Volumes
 postgres_data/
 

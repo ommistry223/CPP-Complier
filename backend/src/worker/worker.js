@@ -10,6 +10,14 @@ const { pool } = require('../db');
 const workerId = `${os.hostname()}-${process.pid}`;
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY) || 4;  // default 4 (was 1)
 
+// ── Prevent a single EPIPE / uncaught error from killing the worker process ──
+process.on('uncaughtException', (err) => {
+  logger.error(`[${workerId}] Uncaught exception (worker kept alive):`, err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error(`[${workerId}] Unhandled rejection (worker kept alive):`, reason);
+});
+
 logger.info(`Starting Worker ${workerId} with concurrency=${CONCURRENCY}`);
 
 // ── Process jobs from the shared Bull queue ────────────────
@@ -17,9 +25,9 @@ compilerQueue.process(CONCURRENCY, async (job) => {
   const { language, code, input } = job.data;
 
   // Safety check
-  if (language !== 'cpp') {
+  if (!['cpp', 'c'].includes(language)) {
     logger.warn(`[${workerId}] Job ${job.id}: unsupported language ${language}`);
-    return { status: 'error', output: 'Only C++ is supported.', time: null, memory: null };
+    return { status: 'error', output: 'Only C (c) and C++ (cpp) are supported.', time: null, memory: null };
   }
 
   logger.info(`[${workerId}] Processing job ${job.id}`);
@@ -28,7 +36,7 @@ compilerQueue.process(CONCURRENCY, async (job) => {
 
   try {
     // ── 1. Redis cache look-up ─────────────────────────
-    const codeHash = Executor.hashFunction(code, 'cpp', input);
+    const codeHash = Executor.hashFunction(code, language, input);
     const cacheKey = `compiler_cache:${codeHash}`;
 
     try {
@@ -42,8 +50,8 @@ compilerQueue.process(CONCURRENCY, async (job) => {
       logger.warn(`[${workerId}] Redis cache read error: ${err.message}`);
     }
 
-    // ── 2. Prepare + compile ───────────────────────────
-    executor = new Executor('cpp', code);
+    // ── 2. Prepare + compile ──────────────────────────
+    executor = new Executor(language, code);
     await executor.prepare();
 
     const compileResult = await executor.compile();

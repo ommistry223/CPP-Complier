@@ -1,7 +1,8 @@
 FROM node:18-bullseye-slim
 
-# Install C++ Compiler for Execution
+# Install C and C++ compilers for code execution
 RUN apt-get update && apt-get install -y \
+    gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 

@@ -1,67 +1,81 @@
-# CodeRunner - Competitive Programming Platform
+﻿# Code Arena - Competitive Programming Platform
 
-A highly scalable, modern competitive programming platform built with a Node.js microservices architecture, PostgreSQL, Redis, and a React/Vite frontend.
+A scalable competitive programming platform built with Node.js microservices, PostgreSQL, Redis, and a React/Vite frontend. Designed for classroom tournaments and hackathons.
 
-## Features Included
-* **Horizontal Scaling** & Load Balancing (via Nginx)
-* **Distributed Job Queue** (Bull + Redis) for async background code execution
-* **Single Compilation** & **Batch Test Execution**
-* **Early Termination** on failing test cases
-* **Code Hash Caching** to avoid re-evaluating duplicate code
-* **Stateless API** design
-* **Premium Glassmorphism Dark UI** (React + Monaco Editor)
+## Features
 
-## Prerequisites
+* **Tournament Mode** - Bulk-create N parallel 1v1 rooms, global leaderboard, admin start-contest with 30s countdown
+* **No Points System** - Winner = most questions solved; ties broken by grid cell count (pure performance ranking)
+* **Knife System** - 3 knives given at game start; usable in Battle Phase (Q4+) to cut an opponent grid cell
+* **Tic-Tac-Toe Grid** - Solve questions to claim cells; first tic-tac-toe wins instantly
+* **Leaderboard** - Shows solved count per team; admin view shows per-question tick grid
+* **Monaco Editor** - Syntax-highlighted C/C++ editor with dark theme and IntelliSense
+* **Run/Submit Animations** - Shimmer sweep on buttons during compilation; knife mode highlights the grid
+* **Hints** - Admin adds per-problem hints revealed by teams during play
+* **Horizontal Scaling** - Nginx load balancer, 3 Bull/Redis workers, PgBouncer connection pooler
 
-Make sure you have the following installed on your machine:
-1. [Node.js](https://nodejs.org/) (v16 or higher)
-2. [PostgreSQL](https://www.postgresql.org/) (Running on port 5432)
-3. [Redis](https://redis.io/download) (Running on port 6379, or use Docker for Redis)
-4. (Optional but Recommended) [Docker Desktop](https://www.docker.com/products/docker-desktop) for running the full distributed stack easily.
+## Prerequisites - Docker Desktop only
 
----
+You only need one thing installed:
 
-## Running Locally (Windows Native)
+* [Docker Desktop](https://www.docker.com/products/docker-desktop) (Windows/Mac/Linux)
 
-I have created dedicated `.bat` files for you to simply double-click and launch everything automatically!
-
-### 1. Requirements
-* Ensure **PostgreSQL** is running on your system (`localhost:5432` with user `postgres` / pass `postgres`). Create a database named `coderunner`.
-* Ensure **Redis** is running in the background (`localhost:6379`). You can use Memurai, WSL Redis, or a Docker container `docker run -p 6379:6379 -d redis`.
-
-### 2. Run Setup Script (Once)
-1. Go to the `f:\Projects\Compiler` folder in your file explorer.
-2. Double-click the **`setup.bat`** file.
-   * This will download all backend/frontend packages and install the pre-made SQL schema / problems.
-
-### 3. Start the Platform
-1. In the same folder, double-click **`run.bat`**.
-2. This will securely pop open 3 separate command windows for:
-   * The load-balanced API
-   * The high-performance Queue Worker
-   * The React/Vite Glassmorphism Frontend
-3. Access the platform safely via your browser at [http://localhost:5173](http://localhost:5173).
+No Node.js, PostgreSQL, or Redis installation required on your machine.
+Everything runs inside Docker containers.
 
 ---
 
-## Method 2: Running the Full Distributed Stack via Docker
+## Quick Start
 
-This will spin up the database, redis cache, multiple stateless API load-balanced servers, and multiple worker nodes.
+### First time on any machine
 
-Open a terminal in the root project folder \`f:\\Projects\\Compiler\` and run:
-\`\`\`powershell
-# Build and start all containers in the background
-docker-compose up --build -d
-\`\`\`
+1. Install **Docker Desktop** and make sure it is running (whale icon in system tray).
+2. Double-click **``setup.bat``** - builds all images and initialises the database (run once only).
+3. Double-click **``run.bat``** - starts all services in the background.
+4. Open **http://localhost** in your browser.
+5. Open **http://localhost/admin_panel** for the admin panel.
 
-Once the containers are running, you need to migrate the database inside the container:
-\`\`\`powershell
-# Run the migration script inside the api1 container
-docker exec -it compiler-api1-1 npm run migrate
-docker exec -it compiler-api1-1 npm run seed
-\`\`\`
+### Starting after setup
 
-*(Note: Depending on your docker-compose version, the container name might slightly vary like \`compiler_api1_1\`. Use \`docker ps\` to check the exact name).*
+Just double-click **``run.bat``** every time you want to start Code Arena.
 
-The load-balanced API will be available at \`http://localhost:80\`.
-*(You would need to update the frontend's API calls to point to this port if testing via Docker).*
+### Stopping
+
+Double-click **``stop-app.bat``** or run ``docker compose down`` in a terminal.
+
+To wipe all data (rooms, problems): ``docker compose down -v``
+
+---
+
+## Bat File Reference
+
+| File | Purpose |
+|------|---------|
+| ``setup.bat`` | First-time: builds images, runs migrations and seeds problems |
+| ``run.bat`` | Start all containers (docker compose up -d) |
+| ``stop-app.bat`` | Stop all containers (docker compose down) |
+
+---
+
+## Architecture Overview
+
+```
+nginx (load balancer :80)
+  +-- api1 (Node.js / Express / WebSocket)
+  +-- frontend (React/Vite, served by nginx)
+  +-- pgbouncer (PostgreSQL connection pooler)
+        +-- db (PostgreSQL 15)
+redis   (Bull queue + in-memory room state)
+worker x3 (Bull job processors in isolated containers)
+```
+
+## Game Flow
+
+1. Admin creates a room (or bulk-creates a tournament of N rooms).
+2. Teams join with their team codes on the Lobby page.
+3. Admin starts the game (30-second countdown for tournaments).
+4. Teams solve coding questions - first to solve picks a tic-tac-toe grid cell.
+5. Questions 1-3: **Knife Phase** - grid pick only, no knives yet.
+6. Questions 4+: **Battle Phase** - teams can use up to 3 knives to destroy opponent cells.
+7. Game ends when all questions are answered or a team gets tic-tac-toe.
+8. Winner = most questions solved. Ties broken by grid cell count.
