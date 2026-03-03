@@ -19,19 +19,62 @@ services:
     image: redis:7-alpine
     ports:
       - "6380:6379"
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
 
   api1:
     build:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - DB_HOST=pgbouncer
       - DB_PORT=5432
       - DB_NAME=coderunner
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - REDIS_HOST=redis
+      - MAX_EXECUTION_TIME=3000
+      - MAX_MEMORY_MB=256
+      - JOB_WAIT_TIMEOUT_MS=35000
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Second API instance: handles compiler + problems routes
+  #    Game WebSocket stays on api1 (in-memory GameManager).
+  #    Nginx routes /api/compiler/* and /api/problems/* to both.
+  api2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=pgbouncer
+      - DB_PORT=5432
+      - DB_NAME=coderunner
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - MAX_EXECUTION_TIME=3000
+      - MAX_MEMORY_MB=256
+      - JOB_WAIT_TIMEOUT_MS=35000
+      - INSTANCE_ID=api2
     depends_on:
       pgbouncer:
         condition: service_started
@@ -52,9 +95,11 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       api1:
+        condition: service_healthy
+      api2:
         condition: service_healthy
       frontend:
         condition: service_started
@@ -73,7 +118,12 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - REDIS_HOST=redis
-      - WORKER_CONCURRENCY=16
+      - WORKER_CONCURRENCY=20
+      - SUBMIT_CONCURRENCY=12
+      - TC_CONCURRENCY=16
+      - MAX_EXECUTION_TIME=3000
+      - MAX_MEMORY_MB=256
+      - NODE_OPTIONS=--max-old-space-size=1024
     depends_on:
       pgbouncer:
         condition: service_started
@@ -82,6 +132,8 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    deploy:
+      replicas: 3
 
   pgbouncer:
     image: edoburu/pgbouncer

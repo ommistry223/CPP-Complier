@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useGameSocket } from '../hooks/useGameSocket';
 import './Lobby.css';
 
-const TEAM_ICONS = ['⚔️', '🔥', '👾', '🐉', '🦅', '💀', '🌩️', '🤖'];
+const TEAM_ICONS = ['🔥', '💀', '👾', '💫', '⚡', '🤖'];
 
 export default function Lobby() {
     const navigate = useNavigate();
     const [teamCode, setTeamCode] = useState('');
     const [teamName, setTeamName] = useState('');
-    const [selectedIcon, setSelectedIcon] = useState(TEAM_ICONS[0]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [joined, setJoined] = useState(false);
@@ -20,6 +19,9 @@ export default function Lobby() {
     const [countdown, setCountdown] = useState<number | null>(null);
     const [countdownName, setCountdownName] = useState('');
     const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Ref to capture current join data for the socket callback (avoids stale closure)
+    const joinDataRef = useRef({ teamCode: '', teamName: '' });
+    const [selectedIcon, setSelectedIcon] = useState('🔥');
 
     /* Animated waiting dots */
     useEffect(() => {
@@ -31,6 +33,10 @@ export default function Lobby() {
     const { send, connected } = useGameSocket(useCallback((msg: any) => {
         if (msg.type === 'joined') {
             setJoined(true); setMyTeam(msg.teamId); setRoom(msg.room); setLoading(false);
+            // If game already started (rejoin after logout), navigate straight to game
+            if (msg.room?.phase === 'playing' || msg.room?.phase === 'grid_pick') {
+                navigate('/game', { state: { room: msg.room, myTeam: msg.teamId, teamName: joinDataRef.current.teamName, teamCode: joinDataRef.current.teamCode } });
+            }
         }
         if (msg.type === 'room_updated' && joined) setRoom(msg.room);
         if (msg.type === 'game_countdown') {
@@ -78,12 +84,14 @@ export default function Lobby() {
         if (!teamCode.trim()) { setError('Enter your team code'); return; }
         if (!teamName.trim()) { setError('Enter your team name'); return; }
         setError(''); setLoading(true);
-        const fullName = `${selectedIcon} ${teamName.trim()}`;
+        const fullName = selectedIcon + ' ' + teamName.trim();
+        const normalizedCode = teamCode.trim().toUpperCase();
         setMyTeamName(fullName);
-        send('join_with_team_code', { teamCode: teamCode.trim().toUpperCase(), teamName: fullName });
+        joinDataRef.current = { teamCode: normalizedCode, teamName: fullName };
+        send('join_with_team_code', { teamCode: normalizedCode, teamName: fullName });
     };
 
-    const teamColor = myTeam === 'A' ? 'var(--neon-cyan)' : 'var(--neon-purple)';
+    const teamColor = myTeam === 'A' ? '#3b82f6' : '#8b5cf6';
     const bothReady = room?.teams?.A?.name && room?.teams?.B?.name;
 
     /* Auto-detect team from code prefix */
@@ -125,12 +133,13 @@ export default function Lobby() {
             <div className="lobby-layout">
                 {/* ── LEFT: Branding panel ────────────────── */}
                 <div className="lobby-left">
+                    <div className="scan-line" />
                     <div className="lobby-brand">
                         <div className="lobby-brand-logo">
                             <div className="logo-grid">
-                                <span className="logo-x" style={{ color: 'var(--neon-cyan)' }}>✕</span>
+                                <span className="logo-x">✕</span>
                                 <span className="logo-sep" />
-                                <span className="logo-o" style={{ color: 'var(--neon-purple)' }}>○</span>
+                                <span className="logo-o">○</span>
                             </div>
                         </div>
                         <h1 className="lobby-brand-title">
@@ -192,7 +201,7 @@ export default function Lobby() {
                             <div className="lobby-card-header">
                                 <div className="lch-badge">
                                     {codeTeam ? (
-                                        <span style={{ color: codeTeam === 'A' ? 'var(--neon-cyan)' : 'var(--neon-purple)' }}>
+                                        <span style={{ color: codeTeam === 'A' ? '#3b82f6' : '#8b5cf6' }}>
                                             Team {codeTeam} detected
                                         </span>
                                     ) : 'Enter Your Code'}
@@ -203,9 +212,7 @@ export default function Lobby() {
 
                             {/* Team code input */}
                             <div className="lc-field">
-                                <label className="lc-label">
-                                    <span className="lc-label-icon">🔑</span> Team Code
-                                </label>
+                                <label className="lc-label">Team Code</label>
                                 <div className="lc-code-wrap">
                                     <input
                                         className={`lc-code-input ${codeTeam === 'A' ? 'code-team-a' : codeTeam === 'B' ? 'code-team-b' : ''}`}
@@ -226,9 +233,7 @@ export default function Lobby() {
 
                             {/* Team name input */}
                             <div className="lc-field">
-                                <label className="lc-label">
-                                    <span className="lc-label-icon">✏️</span> Team Name
-                                </label>
+                                <label className="lc-label">Team Name</label>
                                 <input
                                     className="lc-input"
                                     placeholder="e.g. The Coders"
@@ -241,19 +246,15 @@ export default function Lobby() {
 
                             {/* Team icon picker */}
                             <div className="lc-field">
-                                <label className="lc-label">
-                                    <span className="lc-label-icon">🎭</span> Team Icon
-                                </label>
+                                <label className="lc-label">Team Icon</label>
                                 <div className="icon-picker">
-                                    {TEAM_ICONS.map(ic => (
+                                    {TEAM_ICONS.map(icon => (
                                         <button
-                                            key={ic}
-                                            className={`icon-opt ${selectedIcon === ic ? 'icon-selected' : ''}`}
-                                            onClick={() => setSelectedIcon(ic)}
+                                            key={icon}
                                             type="button"
-                                        >
-                                            {ic}
-                                        </button>
+                                            className={`icon-opt${selectedIcon === icon ? ' icon-selected' : ''}`}
+                                            onClick={() => setSelectedIcon(icon)}
+                                        >{icon}</button>
                                     ))}
                                 </div>
                             </div>
@@ -262,7 +263,7 @@ export default function Lobby() {
                             {teamName && (
                                 <div className="lc-preview">
                                     <span className="lcp-label">Your team will appear as:</span>
-                                    <span className="lcp-name" style={{ color: codeTeam === 'B' ? 'var(--neon-purple)' : 'var(--neon-cyan)' }}>
+                                    <span className="lcp-name" style={{ color: codeTeam === 'B' ? '#8b5cf6' : '#3b82f6' }}>
                                         {selectedIcon} {teamName}
                                     </span>
                                 </div>
@@ -271,7 +272,7 @@ export default function Lobby() {
                             {/* Error */}
                             {error && (
                                 <div className="lc-error">
-                                    <span>⚠️</span> {error}
+                                    <span className="lc-error-icon">!</span> {error}
                                 </div>
                             )}
 
@@ -295,10 +296,10 @@ export default function Lobby() {
 
                             {/* Rules mini strip */}
                             <div className="lc-rules">
-                                <div className="lcr-item"><span>🔪</span> Q1–3 unlock Knives</div>
-                                <div className="lcr-item"><span>⚡</span> Solve fast = more pts</div>
-                                <div className="lcr-item"><span>🎯</span> Win cell per solve</div>
-                                <div className="lcr-item"><span>⭐</span> Bonus Q = 2 picks</div>
+                                <div className="lcr-item"><span className="lcr-dot" /> Q1–3 unlock Knives</div>
+                                <div className="lcr-item"><span className="lcr-dot" /> Solve fast = more pts</div>
+                                <div className="lcr-item"><span className="lcr-dot" /> Win cell per solve</div>
+                                <div className="lcr-item"><span className="lcr-dot" /> Bonus Q = 2 picks</div>
                             </div>
                         </div>
                     ) : (
@@ -323,15 +324,15 @@ export default function Lobby() {
                             <div className="waiting-teams">
                                 <div className="wt-title">Teams Connected</div>
                                 <div className="wt-grid">
-                                    <div className={`wt-card ${room?.teams?.A?.name ? 'wt-ready' : 'wt-waiting'}`} style={{ borderColor: room?.teams?.A?.name ? 'var(--neon-cyan)' : 'var(--glass-border)' }}>
+                                    <div className={`wt-card ${room?.teams?.A?.name ? 'wt-ready' : 'wt-waiting'}`} style={{ borderColor: room?.teams?.A?.name ? '#3b82f6' : '#e2e8f0' }}>
                                         <span className="wt-icon">{room?.teams?.A?.name ? '✅' : '⏳'}</span>
-                                        <span className="wt-team-id" style={{ color: 'var(--neon-cyan)' }}>Team A</span>
+                                        <span className="wt-team-id" style={{ color: '#3b82f6' }}>Team A</span>
                                         <span className="wt-team-name">{room?.teams?.A?.name || 'Waiting…'}</span>
                                     </div>
                                     <div className="wt-vs">VS</div>
-                                    <div className={`wt-card ${room?.teams?.B?.name ? 'wt-ready' : 'wt-waiting'}`} style={{ borderColor: room?.teams?.B?.name ? 'var(--neon-purple)' : 'var(--glass-border)' }}>
+                                    <div className={`wt-card ${room?.teams?.B?.name ? 'wt-ready' : 'wt-waiting'}`} style={{ borderColor: room?.teams?.B?.name ? '#8b5cf6' : '#e2e8f0' }}>
                                         <span className="wt-icon">{room?.teams?.B?.name ? '✅' : '⏳'}</span>
-                                        <span className="wt-team-id" style={{ color: 'var(--neon-purple)' }}>Team B</span>
+                                        <span className="wt-team-id" style={{ color: '#8b5cf6' }}>Team B</span>
                                         <span className="wt-team-name">{room?.teams?.B?.name || 'Waiting…'}</span>
                                     </div>
                                 </div>

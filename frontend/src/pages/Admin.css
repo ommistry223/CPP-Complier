@@ -469,6 +469,49 @@
     }
 }
 
+.game-over-banner {
+    padding: 20px 24px;
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.15), rgba(124, 58, 237, 0.08));
+    border: 1px solid rgba(124, 58, 237, 0.4);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+}
+
+.game-over-title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--neon-purple);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.game-over-result {
+    font-size: 1.15rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+}
+
+.game-over-result.winner {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.game-over-result.tie {
+    color: var(--neon-cyan);
+    background: rgba(0, 245, 255, 0.06);
+    border: 1px solid rgba(0, 245, 255, 0.2);
+}
+
+.game-over-teams {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
 /* Instructions */
 .admin-instructions {
     padding: 24px;

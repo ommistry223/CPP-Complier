@@ -1,0 +1,509 @@
+/* ══════════════════════════════════════════════════════════════
+   BATTLE INTRO — Full-screen VS animation
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Overlay base ─────────────────────────────────────────────── */
+.bi-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    overflow: hidden;
+    /* smooth exit */
+    transition: opacity 0.55s ease, transform 0.55s ease;
+}
+.bi-phase-exiting {
+    opacity: 0;
+    transform: scale(1.12);
+}
+
+/* ── Background layers ─────────────────────────────────────────── */
+.bi-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.bi-bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: biGridIn 0.5s ease forwards;
+    opacity: 0;
+}
+@keyframes biGridIn {
+    to { opacity: 1; }
+}
+
+.bi-bg-rays {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    animation: biRaysIn 0.6s 0.15s ease forwards;
+    opacity: 0;
+}
+@keyframes biRaysIn {
+    to { opacity: 1; }
+}
+
+.bi-bg-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 50%, transparent 30%, rgba(0,0,0,0.85) 100%);
+}
+
+/* ── Ambient glow orbs ─────────────────────────────────────────── */
+.bi-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0;
+    animation: biOrbIn 0.8s 0.3s ease forwards;
+    pointer-events: none;
+}
+@keyframes biOrbIn {
+    to { opacity: 0.18; }
+}
+.bi-orb-a {
+    width: 500px;
+    height: 500px;
+    left: -80px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: radial-gradient(circle, #e040fb 0%, transparent 70%);
+}
+.bi-orb-b {
+    width: 500px;
+    height: 500px;
+    right: -80px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: radial-gradient(circle, #00c8ff 0%, transparent 70%);
+}
+
+/* ── Particles ─────────────────────────────────────────────────── */
+.bi-particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.bi-particle {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0;
+    animation: biParticleFloat linear forwards infinite;
+}
+.bi-particle-0 {
+    background: radial-gradient(circle, #e040fb 0%, transparent 70%);
+    box-shadow: 0 0 8px #e040fb88;
+}
+.bi-particle-1 {
+    background: radial-gradient(circle, #00c8ff 0%, transparent 70%);
+    box-shadow: 0 0 8px #00c8ff88;
+}
+.bi-particle-2 {
+    background: radial-gradient(circle, #ffffff 0%, transparent 70%);
+    box-shadow: 0 0 6px #ffffff66;
+}
+@keyframes biParticleFloat {
+    0%   { opacity: 0; transform: translateY(0) scale(1); }
+    15%  { opacity: 0.7; }
+    70%  { opacity: 0.4; }
+    100% { opacity: 0; transform: translateY(-140px) scale(0.3); }
+}
+
+/* ── Main arena row ────────────────────────────────────────────── */
+.bi-arena {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+    max-width: 1100px;
+    padding: 0 32px;
+}
+
+/* ── Team pod shared ───────────────────────────────────────────── */
+.bi-team-pod {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    opacity: 0;
+}
+.bi-pod-a {
+    animation: biPodSlideA 0.75s 0.15s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+.bi-pod-b {
+    animation: biPodSlideB 0.75s 0.15s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+@keyframes biPodSlideA {
+    from { opacity: 0; transform: translateX(-100px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes biPodSlideB {
+    from { opacity: 0; transform: translateX(100px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Pod background glow */
+.bi-pod-glow {
+    position: absolute;
+    inset: -40px;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0;
+    pointer-events: none;
+    animation: biPodGlowIn 0.5s 1.2s ease forwards;
+}
+@keyframes biPodGlowIn {
+    to { opacity: 0.12; }
+}
+.bi-pod-glow-a { background: radial-gradient(circle, #e040fb, transparent 70%); }
+.bi-pod-glow-b { background: radial-gradient(circle, #00c8ff, transparent 70%); }
+
+/* ── Ring SVG ──────────────────────────────────────────────────── */
+.bi-ring-svg {
+    width: 260px;
+    height: 260px;
+    overflow: visible;
+}
+
+/* All ring circles start hidden */
+.bi-ring {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    fill: none;
+}
+
+/* Team A outer glow ring − draws starting at top (rotate -90°) */
+.bi-ring-a-outer {
+    transform-origin: 150px 150px;
+    transform: rotate(-90deg);
+    animation: biRingDraw 1.3s 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+               biRingPulseA 2.2s 1.8s ease-in-out infinite;
+}
+.bi-ring-a-inner {
+    transform-origin: 150px 150px;
+    transform: rotate(-90deg);
+    animation: biRingDraw 1.3s 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Team B outer glow ring − draws from top too */
+.bi-ring-b-outer {
+    transform-origin: 150px 150px;
+    transform: rotate(-90deg);
+    animation: biRingDraw 1.3s 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+               biRingPulseB 2.2s 1.8s ease-in-out infinite;
+}
+.bi-ring-b-inner {
+    transform-origin: 150px 150px;
+    transform: rotate(-90deg);
+    animation: biRingDraw 1.3s 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes biRingDraw {
+    to { stroke-dashoffset: 0; }
+}
+@keyframes biRingPulseA {
+    0%, 100% { opacity: 1; stroke-width: 8; }
+    50%       { opacity: 0.55; stroke-width: 4; }
+}
+@keyframes biRingPulseB {
+    0%, 100% { opacity: 1; stroke-width: 8; }
+    50%       { opacity: 0.55; stroke-width: 4; }
+}
+
+/* Initials text inside ring — fade in after ring draws */
+.bi-ring-initials {
+    opacity: 0;
+    animation: biInitialsIn 0.5s 1.55s ease forwards;
+}
+@keyframes biInitialsIn {
+    from { opacity: 0; font-size: 36px; }
+    to   { opacity: 1; font-size: 52px; }
+}
+
+/* ── Team label below ring ─────────────────────────────────────── */
+.bi-team-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    animation: biLabelIn 0.45s 1.6s ease forwards;
+}
+@keyframes biLabelIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.bi-team-name {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 0 14px rgba(255,255,255,0.5);
+}
+.bi-team-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+}
+
+/* ── READY pill ─────────────────────────────────────────────────── */
+.bi-ready-pill {
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: biReadyPop 0.4s 1.75s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes biReadyPop {
+    from { opacity: 0; transform: scale(0.6); }
+    to   { opacity: 1; transform: scale(1); }
+}
+.bi-ready-a {
+    color: #e040fb;
+    border: 1px solid rgba(224, 64, 251, 0.4);
+    background: rgba(224, 64, 251, 0.08);
+    box-shadow: 0 0 14px rgba(224, 64, 251, 0.2), inset 0 0 10px rgba(224, 64, 251, 0.06);
+}
+.bi-ready-b {
+    color: #00c8ff;
+    border: 1px solid rgba(0, 200, 255, 0.4);
+    background: rgba(0, 200, 255, 0.08);
+    box-shadow: 0 0 14px rgba(0, 200, 255, 0.2), inset 0 0 10px rgba(0, 200, 255, 0.06);
+}
+
+/* ── VS center column ──────────────────────────────────────────── */
+.bi-vs-center {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 160px;
+    flex-shrink: 0;
+    height: 320px;
+}
+
+/* Sparks SVG */
+.bi-sparks-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.bi-spark-arc {
+    opacity: 0;
+    animation: biSparkFlash linear infinite;
+}
+@keyframes biSparkFlash {
+    0%  { opacity: 0; }
+    20% { opacity: 1; }
+    40% { opacity: 0.7; }
+    55% { opacity: 1; }
+    80% { opacity: 0.3; }
+    100%{ opacity: 0; }
+}
+
+/* Vertical divider */
+.bi-divider-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: linear-gradient(to bottom,
+        transparent 0%,
+        rgba(224,64,251,0.4) 20%,
+        rgba(255,255,255,0.6) 50%,
+        rgba(0,200,255,0.4) 80%,
+        transparent 100%
+    );
+    opacity: 0;
+    animation: biDividerIn 0.5s 0.8s ease forwards;
+}
+@keyframes biDividerIn {
+    to { opacity: 1; }
+}
+
+/* VS block */
+.bi-vs-block {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 110px;
+    height: 110px;
+}
+
+.bi-vs-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Slash draws in */
+.bi-vs-slash {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    filter: drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px rgba(255,255,255,0.5));
+    animation: biSlashDraw 0.3s 1.55s ease forwards;
+}
+@keyframes biSlashDraw {
+    to { stroke-dashoffset: 0; }
+}
+
+/* VS text */
+.bi-vs-text {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transform: scale(3.5);
+    animation: biVsSlam 0.45s 1.72s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+@keyframes biVsSlam {
+    to { opacity: 1; transform: scale(1); }
+}
+.bi-v {
+    font-size: 3.2rem;
+    font-weight: 900;
+    letter-spacing: -2px;
+    color: #e040fb;
+    text-shadow:
+        0 0 10px #e040fb,
+        0 0 24px rgba(224, 64, 251, 0.7),
+        0 0 50px rgba(224, 64, 251, 0.3);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    line-height: 1;
+}
+.bi-s {
+    font-size: 3.2rem;
+    font-weight: 900;
+    letter-spacing: -2px;
+    color: #00c8ff;
+    text-shadow:
+        0 0 10px #00c8ff,
+        0 0 24px rgba(0, 200, 255, 0.7),
+        0 0 50px rgba(0, 200, 255, 0.3);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    line-height: 1;
+}
+
+/* VS pulse after appearance */
+.bi-vs-text {
+    /* The slam animation above; pulse is added via second animation once slam finishes */
+}
+/* We use animation-fill-mode: forwards + a continuous pulse using delay stacking */
+.bi-v {
+    animation: biVColorA 2s 2.4s ease-in-out infinite;
+}
+.bi-s {
+    animation: biVColorB 2s 2.4s ease-in-out infinite;
+}
+@keyframes biVColorA {
+    0%, 100% { text-shadow: 0 0 10px #e040fb, 0 0 24px rgba(224,64,251,0.7), 0 0 50px rgba(224,64,251,0.3); }
+    50%       { text-shadow: 0 0 20px #e040fb, 0 0 50px rgba(224,64,251,0.9), 0 0 80px rgba(224,64,251,0.5); }
+}
+@keyframes biVColorB {
+    0%, 100% { text-shadow: 0 0 10px #00c8ff, 0 0 24px rgba(0,200,255,0.7), 0 0 50px rgba(0,200,255,0.3); }
+    50%       { text-shadow: 0 0 20px #00c8ff, 0 0 50px rgba(0,200,255,0.9), 0 0 80px rgba(0,200,255,0.5); }
+}
+
+/* ── BATTLE START! banner ──────────────────────────────────────── */
+.bi-battle-banner {
+    position: absolute;
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%) translateY(24px);
+    opacity: 0;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.bi-battle-banner.bi-banner-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.bi-banner-text {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow:
+        0 0 12px rgba(255,255,255,0.9),
+        0 0 30px rgba(255,255,255,0.5),
+        0 0 60px rgba(255,200,0,0.4);
+    animation: biBannerPulse 0.35s ease-in-out infinite alternate;
+}
+@keyframes biBannerPulse {
+    from { letter-spacing: 8px; opacity: 0.85; }
+    to   { letter-spacing: 10px; opacity: 1; }
+}
+.bi-banner-underline {
+    margin-top: 8px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #e040fb 30%, #fff 50%, #00c8ff 70%, transparent);
+    border-radius: 2px;
+    animation: biUnderlineGrow 0.4s ease forwards;
+    transform: scaleX(0);
+}
+@keyframes biUnderlineGrow {
+    to { transform: scaleX(1); }
+}
+
+/* ── Flash overlay ─────────────────────────────────────────────── */
+.bi-flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.06s ease;
+}
+.bi-flash-active {
+    animation: biFlashBurst 0.5s ease forwards;
+}
+@keyframes biFlashBurst {
+    0%   { opacity: 0; }
+    15%  { opacity: 0.85; }
+    100% { opacity: 0; }
+}
+
+/* ── Responsive shrink for small screens ───────────────────────── */
+@media (max-width: 800px) {
+    .bi-ring-svg        { width: 180px; height: 180px; }
+    .bi-team-name       { font-size: 1.1rem; }
+    .bi-vs-center       { width: 100px; }
+    .bi-v, .bi-s        { font-size: 2.4rem; }
+    .bi-banner-text     { font-size: 1.1rem; letter-spacing: 5px; }
+}
+@media (max-width: 560px) {
+    .bi-arena           { flex-direction: column; gap: 20px; }
+    .bi-vs-center       { height: 80px; width: 100%; }
+    .bi-divider-line    { display: none; }
+}

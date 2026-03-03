@@ -6,7 +6,7 @@ import axios from 'axios';
 import './Admin.css';
 
 interface RoomCodes { roomCode: string; adminCode: string; teamACode: string; teamBCode: string; }
-interface RoomState { phase: string; teams: { A: { name: string | null }; B: { name: string | null } }; questionCount: number; }
+interface RoomState { phase: string; teams: { A: { name: string | null }; B: { name: string | null } }; questionCount: number; winner: string | null; }
 interface TestCase { id: string; input: string; expected_output: string; is_sample: boolean; order_index: number; }
 interface Problem { id: string; title: string; difficulty: string; is_published: boolean; }
 interface TournamentPair { pairNo: number; roomCode: string; teamACode: string; teamBCode: string; }
@@ -409,12 +409,29 @@ export default function Admin() {
                                     </button>
                                 </div>
                             )}
-                            {gameStarted && (
+                            {gameStarted && room?.phase !== 'ended' && (
                                 <div className="game-live-banner">
                                     <span>🎮 Game is LIVE!</span>
                                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                         {room?.teams.A.name} vs {room?.teams.B.name} · {room?.questionCount} questions
                                     </span>
+                                </div>
+                            )}
+                            {room?.phase === 'ended' && (
+                                <div className="game-over-banner">
+                                    <div className="game-over-title">🏁 GAME OVER</div>
+                                    {room.winner === 'tie' ? (
+                                        <div className="game-over-result tie">🤝 It's a TIE!</div>
+                                    ) : (
+                                        <div className="game-over-result winner">
+                                            🏆 Winner: <strong>
+                                                {room.winner === 'A' ? room.teams.A.name : room.teams.B.name}
+                                            </strong> (Team {room.winner})
+                                        </div>
+                                    )}
+                                    <div className="game-over-teams">
+                                        {room?.teams.A.name} vs {room?.teams.B.name}
+                                    </div>
                                 </div>
                             )}
                             {error && <div className="admin-error" style={{ marginTop: '12px' }}>{error}</div>}
