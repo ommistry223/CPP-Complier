@@ -978,6 +978,7 @@ label {
 .adm-rank { font-weight: 700; font-size: 0.95rem; }
 .adm-rank-1, .adm-rank-2, .adm-rank-3 { font-size: 1.1rem; }
 .adm-team-name { font-weight: 600; }
+.adm-winner-cell { font-weight: 700; color: #22c55e; }
 
 /* ── Live dot ────────────────────────────────────────── */
 .adm-live-dot {

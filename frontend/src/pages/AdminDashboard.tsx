@@ -43,10 +43,13 @@ interface Tournament {
 interface TournamentPair {
   pairNo: number; roomCode: string; teamACode: string; teamBCode: string;
 }
-interface LeaderboardEntry {
-  rank: number; teamName: string; teamCode: string;
-  roomCode: string; solved: number; gridCells: number;
-  phase: string; winner: string | null;
+interface RoomResult {
+  rank: number;
+  roomCode: string;
+  teamA: { name: string | null; gridCells: number; solved: number };
+  teamB: { name: string | null; gridCells: number; solved: number };
+  phase: string;
+  winner: string | null;
 }
 interface Submission {
   id: string; room_code: string; team_id: string; language: string;
@@ -809,7 +812,7 @@ function AnalyticsTabInTournament({ tournamentId }: { tournamentId: string }) {
 
 function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) {
   const toast = useToast();
-  const [lb, setLb] = useState<LeaderboardEntry[]>([]);
+  const [lb, setLb] = useState<RoomResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [frozen, setFrozen] = useState(false);
   const intervalRef = useRef<any>(null);
@@ -823,19 +826,31 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
 
   useEffect(() => {
     load();
-    intervalRef.current = setInterval(load, 10000); // refresh every 10s
+    intervalRef.current = setInterval(load, 10000);
     return () => clearInterval(intervalRef.current);
   }, [load]);
 
   const downloadCSV = () => {
-    const rows = ['Rank,Team,Room,Solved,Grid Cells'];
-    lb.forEach(t => rows.push(`${t.rank},${t.teamName},${t.roomCode},${t.solved},${t.gridCells}`));
+    const rows = ['Rank,Room,Team A,A Cells,Team B,B Cells,Result'];
+    lb.forEach(r => {
+      const result = r.phase !== 'ended' ? 'Playing'
+        : r.winner === 'tie' ? 'Draw'
+        : r.winner === 'A' ? `${r.teamA.name} wins` : `${r.teamB.name} wins`;
+      rows.push(`${r.rank},${r.roomCode},"${r.teamA.name || '—'}",${r.teamA.gridCells},"${r.teamB.name || '—'}",${r.teamB.gridCells},${result}`);
+    });
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `leaderboard-${tournamentId}.csv`; a.click();
   };
 
   const resetLb = () => { setLb([]); load(); toast('Leaderboard refreshed', 'info'); };
+
+  const getStatusBadge = (r: RoomResult) => {
+    if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
+    if (r.winner === 'tie') return <span className="adm-badge badge-default">🤝 Draw</span>;
+    const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
+    return <span className="adm-badge badge-accepted">🏆 {winName}</span>;
+  };
 
   return (
     <div className="adm-card adm-mt">
@@ -858,36 +873,34 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
         <table className="adm-table">
           <thead>
             <tr>
-              <th>Rank</th><th>Team</th><th>Room</th><th>Solved</th><th>Grid Cells</th><th>Status</th>
+              <th>#</th><th>Room</th><th>Team A</th><th>Cells</th><th>Team B</th><th>Cells</th><th>Result</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan={6}><Skeleton h={24} /></td></tr>) :
-              lb.map(t => (
-                <tr key={`${t.roomCode}-${t.teamCode}`} className={t.rank <= 3 ? 'adm-top-row' : ''}>
+            {loading ? Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan={7}><Skeleton h={24} /></td></tr>) :
+              lb.map(r => (
+                <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' ? 'adm-top-row' : ''}>
                   <td>
-                    <span className={`adm-rank adm-rank-${t.rank}`}>
-                      {t.rank === 1 ? '🥇' : t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : `#${t.rank}`}
+                    <span className={`adm-rank adm-rank-${r.rank}`}>
+                      {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `#${r.rank}`}
                     </span>
                   </td>
-                  <td className="adm-team-name">{t.teamName}</td>
-                  <td><span className="adm-mono">{t.roomCode}</span></td>
-                  <td><strong>{t.solved}</strong></td>
-                  <td>{t.gridCells}</td>
-                  <td>
-                    {t.winner === t.teamCode?.charAt(0)
-                      ? <span className="adm-badge badge-accepted">Winner</span>
-                      : t.phase === 'ended'
-                        ? <span className="adm-badge badge-default">Ended</span>
-                        : <span className="adm-badge badge-live">Playing</span>
-                    }
+                  <td><span className="adm-mono">{r.roomCode}</span></td>
+                  <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                    {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                   </td>
+                  <td><strong>{r.teamA.gridCells}</strong></td>
+                  <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                    {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
+                  </td>
+                  <td><strong>{r.teamB.gridCells}</strong></td>
+                  <td>{getStatusBadge(r)}</td>
                 </tr>
               ))
             }
           </tbody>
         </table>
-        {!loading && lb.length === 0 && <div className="adm-empty">No teams have joined yet</div>}
+        {!loading && lb.length === 0 && <div className="adm-empty">No rooms found</div>}
       </div>
     </div>
   );
@@ -1445,7 +1458,7 @@ function QuestionsPage() {
 function LeaderboardPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selected, setSelected] = useState<string>('');
-  const [lb, setLb] = useState<LeaderboardEntry[]>([]);
+  const [lb, setLb] = useState<RoomResult[]>([]);
   const [meta, setMeta] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [frozen, setFrozen] = useState(false);
@@ -1463,7 +1476,7 @@ function LeaderboardPage() {
     if (!selected) return;
     setLoading(true);
     axios.get(API(`/tournaments/${selected}/leaderboard`))
-      .then(r => { setLb(r.data.leaderboard || []); })
+      .then(r => { setLb(r.data.leaderboard || []); setMeta(r.data.tournament); })
       .finally(() => setLoading(false));
   }, [selected]);
 
@@ -1477,11 +1490,23 @@ function LeaderboardPage() {
   }, [selected, frozen]);
 
   const downloadCSV = () => {
-    const rows = ['Rank,Team,Room,Solved,Grid Cells,Status'];
-    lb.forEach(t => rows.push(`${t.rank},"${t.teamName}",${t.roomCode},${t.solved},${t.gridCells},${t.phase}`));
+    const rows = ['Rank,Room,Team A,A Cells,Team B,B Cells,Result'];
+    lb.forEach(r => {
+      const result = r.phase !== 'ended' ? 'Playing'
+        : r.winner === 'tie' ? 'Draw'
+        : r.winner === 'A' ? `${r.teamA.name} wins` : `${r.teamB.name} wins`;
+      rows.push(`${r.rank},${r.roomCode},"${r.teamA.name || '—'}",${r.teamA.gridCells},"${r.teamB.name || '—'}",${r.teamB.gridCells},${result}`);
+    });
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `leaderboard-${selected}.csv`; a.click();
+  };
+
+  const getStatusBadge = (r: RoomResult) => {
+    if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
+    if (r.winner === 'tie') return <span className="adm-badge badge-default">🤝 Draw</span>;
+    const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
+    return <span className="adm-badge badge-accepted">🏆 {winName}</span>;
   };
 
   return (
@@ -1509,26 +1534,27 @@ function LeaderboardPage() {
         <div className="adm-table-wrap">
           <table className="adm-table">
             <thead>
-              <tr><th>Rank</th><th>Team</th><th>Room</th><th>Solved</th><th>Grid Cells</th><th>Status</th></tr>
+              <tr><th>#</th><th>Room</th><th>Team A</th><th>Cells</th><th>Team B</th><th>Cells</th><th>Result</th></tr>
             </thead>
             <tbody>
-              {loading ? Array(6).fill(0).map((_, i) => <tr key={i}><td colSpan={6}><Skeleton h={28} /></td></tr>) :
-                lb.map(t => (
-                  <tr key={`${t.roomCode}-${t.teamCode}`} className={t.rank <= 3 ? 'adm-top-row' : ''}>
+              {loading ? Array(6).fill(0).map((_, i) => <tr key={i}><td colSpan={7}><Skeleton h={28} /></td></tr>) :
+                lb.map(r => (
+                  <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' ? 'adm-top-row' : ''}>
                     <td>
-                      <span className={`adm-rank adm-rank-${t.rank}`}>
-                        {t.rank === 1 ? '🥇' : t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : `#${t.rank}`}
+                      <span className={`adm-rank adm-rank-${r.rank}`}>
+                        {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `#${r.rank}`}
                       </span>
                     </td>
-                    <td className="adm-team-name">{t.teamName}</td>
-                    <td><span className="adm-mono">{t.roomCode}</span></td>
-                    <td><strong>{t.solved}</strong></td>
-                    <td>{t.gridCells}</td>
-                    <td>
-                      {t.phase === 'ended'
-                        ? <span className="adm-badge badge-default">Ended</span>
-                        : <span className="adm-badge badge-live">Playing</span>}
+                    <td><span className="adm-mono">{r.roomCode}</span></td>
+                    <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                      {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                     </td>
+                    <td><strong>{r.teamA.gridCells}</strong></td>
+                    <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                      {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
+                    </td>
+                    <td><strong>{r.teamB.gridCells}</strong></td>
+                    <td>{getStatusBadge(r)}</td>
                   </tr>
                 ))
               }
@@ -1536,7 +1562,7 @@ function LeaderboardPage() {
           </table>
           {!loading && lb.length === 0 && (
             <div className="adm-empty">
-              {tournaments.length === 0 ? 'No tournaments found' : 'No teams have joined yet'}
+              {tournaments.length === 0 ? 'No tournaments found' : 'No rooms found'}
             </div>
           )}
         </div>

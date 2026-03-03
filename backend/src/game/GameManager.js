@@ -250,15 +250,12 @@ async function placeOnGrid(roomCode, teamId, cellIdx) {
 }
 
 function _endGame(room) {
-    const a = room.teams.A; const b = room.teams.B;
     const aGrid = room.grid.filter(c => c === 'A').length;
     const bGrid = room.grid.filter(c => c === 'B').length;
-    let winner;
-    if (a.solved.length !== b.solved.length) winner = a.solved.length > b.solved.length ? 'A' : 'B';
-    else if (aGrid !== bGrid) winner = aGrid > bGrid ? 'A' : 'B';
-    else winner = 'tie';
+    // Winner decided purely by grid cell count; equal = draw
+    const winner = aGrid > bGrid ? 'A' : bGrid > aGrid ? 'B' : 'tie';
     room.winner = winner; room.phase = 'ended';
-    return { ok: true, event: 'game_over', room, data: { winner, reason: 'solved_count', aSolved: a.solved.length, bSolved: b.solved.length } };
+    return { ok: true, event: 'game_over', room, data: { winner, reason: 'grid_cells', aGrid, bGrid } };
 }
 
 async function useKnife(roomCode, teamId, targetCellIdx) {

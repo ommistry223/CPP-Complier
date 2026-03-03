@@ -35,7 +35,9 @@ export default function Lobby() {
             setJoined(true); setMyTeam(msg.teamId); setRoom(msg.room); setLoading(false);
             // If game already started (rejoin after logout), navigate straight to game
             if (msg.room?.phase === 'playing' || msg.room?.phase === 'grid_pick') {
-                navigate('/game', { state: { room: msg.room, myTeam: msg.teamId, teamName: joinDataRef.current.teamName, teamCode: joinDataRef.current.teamCode } });
+                // Use name stored on server (prevents name-change on rejoin)
+                const storedName = msg.room?.teams?.[msg.teamId]?.name || joinDataRef.current.teamName;
+                navigate('/game', { state: { room: msg.room, myTeam: msg.teamId, teamName: storedName, teamCode: joinDataRef.current.teamCode } });
             }
         }
         if (msg.type === 'room_updated' && joined) setRoom(msg.room);
@@ -58,7 +60,9 @@ export default function Lobby() {
         if (msg.type === 'game_started') {
             if (countdownRef.current) clearInterval(countdownRef.current!);
             setCountdown(null);
-            navigate('/game', { state: { room: msg.room, myTeam, teamName: myTeamName, teamCode: teamCode.trim().toUpperCase() } });
+            // Use name stored on server to prevent name override on rejoin
+            const storedName2 = myTeam ? (msg.room?.teams?.[myTeam]?.name || myTeamName) : myTeamName;
+            navigate('/game', { state: { room: msg.room, myTeam, teamName: storedName2, teamCode: teamCode.trim().toUpperCase() } });
         }
         if (msg.type === 'error') { setError(msg.message); setLoading(false); }
     }, [joined, myTeam, myTeamName, navigate, teamCode]));

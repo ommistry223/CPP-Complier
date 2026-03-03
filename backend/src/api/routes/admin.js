@@ -551,27 +551,29 @@ router.get('/tournaments/:id/leaderboard', async (req, res) => {
     for (const roomCode of tournament.rooms) {
       const room = await GameManager.getRoom(roomCode);
       if (!room) continue;
-      ['A', 'B'].forEach(tid => {
-        const team = room.teams[tid];
-        if (team && team.name) {
-          leaderboard.push({
-            teamName: team.name,
-            teamCode: tid === 'A' ? room.teamACode : room.teamBCode,
-            roomCode,
-            solved: team.solved?.length || 0,
-            gridCells: room.grid?.filter(c => c === tid).length || 0,
-            phase: room.phase,
-            winner: room.winner,
-          });
-        }
+      const teamA = room.teams['A'];
+      const teamB = room.teams['B'];
+      const aGrid = room.grid?.filter(c => c === 'A').length || 0;
+      const bGrid = room.grid?.filter(c => c === 'B').length || 0;
+      leaderboard.push({
+        roomCode,
+        teamA: { name: teamA?.name || null, gridCells: aGrid, solved: teamA?.solved?.length || 0 },
+        teamB: { name: teamB?.name || null, gridCells: bGrid, solved: teamB?.solved?.length || 0 },
+        phase: room.phase,
+        winner: room.winner || null, // 'A', 'B', 'tie', or null
       });
     }
 
-    // Sort: solved DESC, gridCells DESC
-    leaderboard.sort((a, b) =>
-      b.solved !== a.solved ? b.solved - a.solved : b.gridCells - a.gridCells
-    );
-    leaderboard.forEach((t, i) => { t.rank = i + 1; });
+    // Sort: ended first (by winner's cells DESC), then active, then waiting
+    const phasePriority = (r) => r.phase === 'ended' ? 0 : (r.phase === 'playing' || r.phase === 'grid_pick') ? 1 : 2;
+    leaderboard.sort((a, b) => {
+      const pa = phasePriority(a), pb = phasePriority(b);
+      if (pa !== pb) return pa - pb;
+      const aTop = Math.max(a.teamA.gridCells, a.teamB.gridCells);
+      const bTop = Math.max(b.teamA.gridCells, b.teamB.gridCells);
+      return bTop - aTop;
+    });
+    leaderboard.forEach((r, i) => { r.rank = i + 1; });
 
     res.json({ leaderboard, tournament: { id: tournament.id, name: tournament.name, status: tournament.status } });
   } catch (err) {
