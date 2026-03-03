@@ -41,6 +41,8 @@ services:
       - MAX_EXECUTION_TIME=3000
       - MAX_MEMORY_MB=256
       - JOB_WAIT_TIMEOUT_MS=35000
+    tmpfs:
+      - /app/temp:size=128m,mode=1777
     depends_on:
       pgbouncer:
         condition: service_started
@@ -75,6 +77,8 @@ services:
       - MAX_MEMORY_MB=256
       - JOB_WAIT_TIMEOUT_MS=35000
       - INSTANCE_ID=api2
+    tmpfs:
+      - /app/temp:size=128m,mode=1777
     depends_on:
       pgbouncer:
         condition: service_started
@@ -124,6 +128,12 @@ services:
       - MAX_EXECUTION_TIME=3000
       - MAX_MEMORY_MB=256
       - NODE_OPTIONS=--max-old-space-size=1024
+      - BIN_CACHE_MAX=150
+    tmpfs:
+      # All source writes, compiled binaries, and test I/O live in RAM.
+      # 512 MB covers ~150 cached binaries (~1 MB each) + active run dirs.
+      # Cleared automatically on container restart — no disk leaks.
+      - /app/temp:size=512m,mode=1777
     depends_on:
       pgbouncer:
         condition: service_started
@@ -156,5 +166,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@arena.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
+  pgadmin_data:

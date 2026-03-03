@@ -77,7 +77,16 @@ submitQueue.on('stalled',(job)       => logger.warn(`Submit job ${job.id} stalle
 
 const enqueueSubmitJob = async (payload) => {
     try {
-        const job = await submitQueue.add(payload, { priority: 1 });
+        const job = await submitQueue.add(
+            payload,
+            {
+                priority: 1,
+                // Use cacheKey (which is sha256 of lang+problem+code) as the
+                // Bull jobId so that N identical concurrent submissions share
+                // ONE job instead of spawning N compilations.
+                jobId: payload.cacheKey || undefined,
+            }
+        );
         logger.info(`Submit job enqueued: ${job.id} problem=${payload.problemId}`);
         return job;
     } catch (error) {

@@ -174,8 +174,10 @@ submitQueue.process(SUBMIT_CONCURRENCY, async (job) => {
     // ── 4. Run all test cases ─────────────────────────────
     const result = await executor.runBatch(testCases);
 
-    // ── 5. Cache accepted results for 1 hour ──────────────
-    if (result.verdict === 'accepted' && cacheKey) {
+    // ── 5. Cache ALL deterministic verdicts (AC, WA, CE) for 1 hour ────────
+    // Caching WA/CE means re-submitting the same wrong/broken code is
+    // instant and wastes no compilation or test-case execution slots.
+    if (result.verdict && result.verdict !== 'system_error' && cacheKey) {
       try { await redisClient.setex(cacheKey, 3600, JSON.stringify(result)); } catch (_) {}
     }
 
