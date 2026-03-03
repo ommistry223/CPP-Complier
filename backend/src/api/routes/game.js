@@ -20,8 +20,7 @@ router.get('/:code/questions', async (req, res) => {
         if (Array.isArray(room.questionIds) && room.questionIds.length > 0) {
             // Fetch questions by IDs and preserve assignment order
             const result = await db.query(
-                `SELECT id, title, difficulty, problem_set, time_limit, memory_limit, description, input_format, output_format, constraints, examples
-                 FROM problems WHERE id = ANY($1) AND published = true`,
+                `SELECT * FROM problems WHERE id = ANY($1) AND is_published = true`,
                 [room.questionIds]
             );
             // Sort by the order of questionIds on the room
@@ -33,8 +32,7 @@ router.get('/:code/questions', async (req, res) => {
 
         // Fallback: return all published problems (non-tournament rooms)
         const result = await db.query(
-            `SELECT id, title, difficulty, problem_set, time_limit, memory_limit, description, input_format, output_format, constraints, examples
-             FROM problems WHERE published = true ORDER BY created_at`
+            `SELECT * FROM problems WHERE is_published = true ORDER BY created_at`
         );
         res.json({ problems: result.rows });
     } catch (err) {

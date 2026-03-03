@@ -116,8 +116,9 @@ async function joinWithTeamCode(teamCode, teamName) {
     if (!foundRoom) return { error: 'Invalid team code' };
     // Allow rejoining if already playing (reconnect scenario)
     if (foundRoom.phase === 'ended') return { error: 'Game is already over' };
-    const isRejoin = foundRoom.phase !== 'waiting';
-    if (!isRejoin) {
+    // Always set team name on first join; also set it on late joins (e.g. tournament
+    // started before the team joined — their name would still be null)
+    if (teamName && !foundRoom.teams[tid].name) {
         foundRoom.teams[tid].name = teamName;
     }
     await saveRoom(foundRoom);
