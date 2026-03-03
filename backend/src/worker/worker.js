@@ -122,7 +122,7 @@ const SUBMIT_CONCURRENCY = parseInt(process.env.SUBMIT_CONCURRENCY) || CONCURREN
 logger.info(`[${workerId}] submit concurrency=${SUBMIT_CONCURRENCY}`);
 
 submitQueue.process(SUBMIT_CONCURRENCY, async (job) => {
-  const { language, code, problemId, cacheKey } = job.data;
+  const { language, code, problemId, cacheKey, roomCode, teamId } = job.data;
 
   if (!['cpp', 'c'].includes(language) || !problemId) {
     return { verdict: 'system_error', error: 'Invalid job payload.', testCasesPassed: 0, totalTestCases: 0 };
