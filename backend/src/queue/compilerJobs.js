@@ -39,12 +39,7 @@ const enqueueCompilerJob = async (language, code, input) => {
     try {
         const job = await compilerQueue.add(
             { language, code, input },
-            {
-                // Per-job priority: higher = processed sooner
-                // All jobs start equal (priority 1) but you can
-                // pass a different value from the route if needed.
-                priority: 1,
-            }
+            { priority: 1 }
         );
         logger.info(`Compiler job enqueued: ${job.id}`);
         return job;
@@ -54,4 +49,41 @@ const enqueueCompilerJob = async (language, code, input) => {
     }
 };
 
-module.exports = { compilerQueue, enqueueCompilerJob };
+/* ─────────────────────────────────────────────────────────────────────
+   Submit queue — handles full judge jobs (compile + all test cases).
+   Separate queue so /submit jobs don't starve or mix with /run jobs.
+   Higher timeout (90s) because we run batches of test cases.
+───────────────────────────────────────────────────────────────────── */
+const submitQueue = new Queue('submit-jobs', {
+    redis: redisConfig,
+    defaultJobOptions: {
+        attempts:         1,
+        removeOnComplete: true,
+        removeOnFail:     false,
+        timeout:          90000,   // 90s — covers compile + many test cases
+        backoff:          { type: 'fixed', delay: 0 },
+    },
+    settings: {
+        lockDuration:    60000,
+        lockRenewTime:   15000,
+        stalledInterval: 30000,
+        maxStalledCount: 1,
+    },
+});
+
+submitQueue.on('error',  (err)       => logger.error('Submit Queue Error:', err));
+submitQueue.on('failed', (job, err)  => logger.error(`Submit job ${job.id} failed:`, err.message));
+submitQueue.on('stalled',(job)       => logger.warn(`Submit job ${job.id} stalled!`));
+
+const enqueueSubmitJob = async (payload) => {
+    try {
+        const job = await submitQueue.add(payload, { priority: 1 });
+        logger.info(`Submit job enqueued: ${job.id} problem=${payload.problemId}`);
+        return job;
+    } catch (error) {
+        logger.error('Failed to enqueue submit job:', error);
+        throw error;
+    }
+};
+
+module.exports = { compilerQueue, enqueueCompilerJob, submitQueue, enqueueSubmitJob };

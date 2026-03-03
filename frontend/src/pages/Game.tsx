@@ -7,6 +7,7 @@ import {
     Maximize2, Minimize2, UploadCloud, FileCode
 } from 'lucide-react';
 import { useGameSocket } from '../hooks/useGameSocket';
+import BattleIntro from '../components/BattleIntro';
 import './Game.css';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -232,13 +233,16 @@ export default function Game() {
 
     const myTeam = state.myTeam;
 
+    // ── Battle intro ─────────────────────────────────────────
+    const [showBattleIntro, setShowBattleIntro] = useState(true);
+    const handleBattleDone = useCallback(() => setShowBattleIntro(false), []);
+
     // ── SOCKET HOOK ──────────────────────────────────────────
     const [room, setRoom] = useState<Room>(state.room);
     const [questions, setQuestions] = useState<any[]>([]);
     const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
     const [execTime, setExecTime] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
-    const [reactions, setReactions] = useState<{ id: number; emoji: string }[]>([]);
     const [elapsed, setElapsed] = useState(0);
     const [problemOpen, setProblemOpen] = useState(true);
     const [knifeMode, setKnifeMode] = useState(false);
@@ -337,12 +341,6 @@ export default function Game() {
                 setRoom(msg.room);
                 break;
 
-            case 'team_reacted': {
-                const id = Date.now() + Math.random();
-                setReactions(prev => [...prev, { id, emoji: msg.emoji }]);
-                setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 4000);
-                break;
-            }
             case 'error': showToast(msg.message, 'error'); break;
         }
     }, [myTeam]));
@@ -358,17 +356,30 @@ export default function Game() {
         }
     }, [connected, send, state.teamCode, state.teamName]);
 
-    useEffect(() => {
-        axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems?published=true`)
-            .then(res => {
-                if (res.data && res.data.problems) {
-                    setQuestions(res.data.problems);
-                } else if (Array.isArray(res.data)) {
-                    setQuestions(res.data);
-                }
-            })
-            .catch(err => console.error("Failed to load questions:", err));
+    const [questionsError, setQuestionsError] = useState(false);
+
+    const loadQuestions = useCallback(() => {
+        setQuestionsError(false);
+        const tryFetch = (attempt: number): Promise<void> =>
+            axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems?published=true`)
+                .then(res => {
+                    const list = res.data?.problems ?? (Array.isArray(res.data) ? res.data : null);
+                    if (list && list.length > 0) {
+                        setQuestions(list);
+                    } else if (attempt < 3) {
+                        return new Promise<void>(r => setTimeout(r, 800 * attempt)).then(() => tryFetch(attempt + 1));
+                    } else {
+                        setQuestionsError(true);
+                    }
+                })
+                .catch(() => {
+                    if (attempt < 3) return new Promise<void>(r => setTimeout(r, 800 * attempt)).then(() => tryFetch(attempt + 1));
+                    setQuestionsError(true);
+                });
+        tryFetch(1);
     }, []);
+
+    useEffect(() => { loadQuestions(); }, [loadQuestions]);
 
     // Fetch sample test cases whenever question changes — clear OLD state immediately
     useEffect(() => {
@@ -568,12 +579,15 @@ export default function Game() {
         }
     };
 
-    const handleReact = (emoji: string) => {
-        send('player_react', { emoji });
-    };
-
     return (
         <div className="game-pro-root">
+            {showBattleIntro && (
+                <BattleIntro
+                    teamA={room.teams.A.name || 'Team A'}
+                    teamB={room.teams.B.name || 'Team B'}
+                    onDone={handleBattleDone}
+                />
+            )}
             {/* ── TOP NAV BAR ─────────────────────────────────── */}
             <header className="game-top-nav">
                 <div className="nav-left">
@@ -695,7 +709,23 @@ export default function Game() {
                                     )}
                                 </div>
                             </div>
-                        ) : <div className="q-loading">Loading Challenge...</div>}
+                        ) : (
+                            <div className="q-loading">
+                                {questionsError ? (
+                                    <>
+                                        <div style={{ marginBottom: '10px', color: '#e55' }}>Failed to load challenge</div>
+                                        <button
+                                            onClick={loadQuestions}
+                                            style={{
+                                                padding: '6px 16px', borderRadius: '6px',
+                                                background: '#2563eb', color: '#fff',
+                                                border: 'none', cursor: 'pointer', fontSize: '13px'
+                                            }}
+                                        >↻ Retry</button>
+                                    </>
+                                ) : 'Loading Challenge...'}
+                            </div>
+                        )}
                     </div>
                 </aside>
                 <button
@@ -1064,12 +1094,6 @@ export default function Game() {
                             )}
                         </div>
 
-                        {/* Reactions */}
-                        <div className="bc-reactions">
-                            {['🔥', '💀', '🤡', '👏', '⚡', '🤖'].map(emoji => (
-                                <button key={emoji} className="bc-react-btn" title={emoji} onClick={() => handleReact(emoji)}>{emoji}</button>
-                            ))}
-                        </div>
 
                     </div>
                 </aside>
@@ -1095,9 +1119,7 @@ export default function Game() {
                 </div>
             )}
 
-            <div className="pro-floating-layer">
-                {reactions.map(r => <div key={r.id} className="pro-floating-emoji" style={{ left: `${Math.random() * 80 + 10}%` }}>{r.emoji}</div>)}
-            </div>
+
         </div>
     );
 }

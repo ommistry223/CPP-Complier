@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import Lobby from './pages/Lobby';
@@ -5,6 +6,7 @@ import Game from './pages/Game';
 import Admin from './pages/Admin';
 import Compiler from './pages/Compiler';
 import Leaderboard from './pages/Leaderboard';
+import LoadingScreen from './components/LoadingScreen';
 
 function AppInner() {
   const { pathname } = useLocation();
@@ -26,10 +28,16 @@ function AppInner() {
 }
 
 function App() {
+  const [loading, setLoading] = useState(true);
+  const handleDone = useCallback(() => setLoading(false), []);
+
   return (
-    <BrowserRouter>
-      <AppInner />
-    </BrowserRouter>
+    <>
+      {loading && <LoadingScreen onDone={handleDone} />}
+      <BrowserRouter>
+        <AppInner />
+      </BrowserRouter>
+    </>
   );
 }
 
