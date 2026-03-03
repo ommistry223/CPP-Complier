@@ -265,6 +265,38 @@ const migrations = [
   );
 
   CREATE INDEX IF NOT EXISTS idx_worker_metrics_worker ON worker_metrics(worker_id);
+  `,
+
+    // Migration 13: Game Submissions (store game contest results without requiring a user account)
+    `
+  CREATE TABLE IF NOT EXISTS game_submissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_code VARCHAR(20) NOT NULL,
+    team_id   CHAR(1) NOT NULL,
+    problem_id UUID REFERENCES problems(id) ON DELETE SET NULL,
+    language   VARCHAR(50) NOT NULL,
+    code       TEXT NOT NULL,
+    verdict    VARCHAR(50) NOT NULL,
+    test_cases_passed INTEGER DEFAULT 0,
+    total_test_cases  INTEGER DEFAULT 0,
+    time_taken INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_game_sub_room    ON game_submissions(room_code, team_id);
+  CREATE INDEX IF NOT EXISTS idx_game_sub_problem ON game_submissions(problem_id);
+  CREATE INDEX IF NOT EXISTS idx_game_sub_verdict ON game_submissions(verdict);
+  `,
+
+    // Migration 14: Add problem_set column to problems (Set A / Set B / Both / none)
+    `
+  ALTER TABLE problems ADD COLUMN IF NOT EXISTS problem_set VARCHAR(10) DEFAULT 'none';
+  CREATE INDEX IF NOT EXISTS idx_problems_set ON problems(problem_set);
+  `,
+
+    // Migration 15: Add bonus points column to problems
+    `
+  ALTER TABLE problems ADD COLUMN IF NOT EXISTS bonus INTEGER DEFAULT 0;
   `
 ];
 

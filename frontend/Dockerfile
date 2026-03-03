@@ -1,5 +1,5 @@
 # Use Node.js as the base image for building
-FROM node:18-bullseye-slim AS build
+FROM node:20-bullseye-slim AS build
 
 # Set working directory
 WORKDIR /app

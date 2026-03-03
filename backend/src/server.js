@@ -71,6 +71,7 @@ app.use('/api/compiler', require('./api/routes/compiler'));
 app.use('/api/problems', require('./api/routes/problems'));
 app.use('/api/game', require('./api/routes/game'));
 app.use('/api/tournament', require('./api/routes/tournament'));
+app.use('/api/admin', require('./api/routes/admin'));
 
 // ── 404 / Error handlers ──────────────────────────────────
 app.use((req, res) => res.status(404).json({ status: 'error', message: 'Route not found' }));

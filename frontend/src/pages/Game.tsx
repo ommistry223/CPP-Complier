@@ -276,6 +276,10 @@ export default function Game() {
     const [knifeMode, setKnifeMode] = useState(false);
     const [editorFullscreen, setEditorFullscreen] = useState(false);
     const [langChoice, setLangChoice] = useState<'cpp' | 'c'>('cpp');
+    // Separate editor code state — decoupled from room so socket updates don't wipe it
+    const [editorCode, setEditorCode] = useState<string>(() =>
+        loadCode(state.room.code, state.room.currentQuestionIdx, state.myTeam, 'cpp') ?? CPP_TEMPLATE
+    );
     // ── Test Cases (LeetCode style) ───────────────────────────
     const [sampleTcs, setSampleTcs] = useState<{ id: string; input: string; expected_output: string }[]>([]);
     const [activeTcIdx, setActiveTcIdx] = useState(0);
@@ -427,13 +431,7 @@ export default function Game() {
         // Restore saved code for this question, or fall back to template
         const initialCode = loadCode(room.code, room.currentQuestionIdx, myTeam, langChoice)
             ?? (langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE);
-        setRoom(prev => ({
-            ...prev,
-            teams: {
-                ...prev.teams,
-                [myTeam]: { ...prev.teams[myTeam], code: initialCode }
-            }
-        }));
+        setEditorCode(initialCode);
 
         if (!qId) return;
         axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems/${qId}/testcases`)
@@ -454,13 +452,7 @@ export default function Game() {
     useEffect(() => {
         const saved = loadCode(room.code, room.currentQuestionIdx, myTeam, langChoice)
             ?? (langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE);
-        setRoom(prev => ({
-            ...prev,
-            teams: {
-                ...prev.teams,
-                [myTeam]: { ...prev.teams[myTeam], code: saved }
-            }
-        }));
+        setEditorCode(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [langChoice]);
 
@@ -486,7 +478,7 @@ export default function Game() {
 
     const currentQ = questions[room.currentQuestionIdx];
     const myTeamData = room.teams[myTeam];
-    const code = myTeamData.code || CPP_TEMPLATE;
+    const code = editorCode;
     const knivesAvail = myTeamData.knivesUnlocked - myTeamData.knivesUsed;
     const canPlace = (room.phase === 'grid_pick' && room.lastSolvedBy === myTeam && myTeamData.pendingGridPicks > 0);
     // Knife can only be activated in battle phase (Q4+, idx >= 3)
@@ -495,13 +487,7 @@ export default function Game() {
     // Handlers
     const handleCodeChange = (val: string | undefined) => {
         const newCode = val || '';
-        setRoom(prev => ({
-            ...prev,
-            teams: {
-                ...prev.teams,
-                [myTeam]: { ...prev.teams[myTeam], code: newCode }
-            }
-        }));
+        setEditorCode(newCode);
         // Persist to localStorage so refresh doesn't lose code
         saveCode(room.code, room.currentQuestionIdx, myTeam, langChoice, newCode);
         send('player_typing', { isTyping: true });

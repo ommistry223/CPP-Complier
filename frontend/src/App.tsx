@@ -6,11 +6,12 @@ import Game from './pages/Game';
 import Admin from './pages/Admin';
 import Compiler from './pages/Compiler';
 import Leaderboard from './pages/Leaderboard';
+import AdminDashboard from './pages/AdminDashboard';
 import LoadingScreen from './components/LoadingScreen';
 
 function AppInner() {
   const { pathname } = useLocation();
-  const hideNav = pathname === '/admin_panel' || pathname === '/game' || pathname.startsWith('/leaderboard');
+  const hideNav = pathname === '/admin_panel' || pathname === '/game' || pathname.startsWith('/leaderboard') || pathname === '/dashboard';
   return (
     <div className="app-container">
       {!hideNav && <Navbar />}
@@ -21,6 +22,7 @@ function AppInner() {
           <Route path="/admin_panel" element={<Admin />} />
           <Route path="/compiler" element={<Compiler />} />
           <Route path="/leaderboard/:tournamentId" element={<Leaderboard />} />
+          <Route path="/dashboard" element={<AdminDashboard />} />
         </Routes>
       </main>
     </div>

@@ -38,11 +38,13 @@ const query = async (text, params) => {
   }
 };
 
-const getProblems = async ({ published }) => {
-  const res = await query(
-    'SELECT * FROM problems WHERE is_published = $1 ORDER BY id ASC',
-    [published]
-  );
+const getProblems = async ({ published, set } = {}) => {
+  const conditions = [];
+  const params = [];
+  if (published !== undefined) { params.push(published); conditions.push(`is_published = $${params.length}`); }
+  if (set && set !== 'all') { params.push(set); conditions.push(`problem_set = $${params.length}`); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const res = await query(`SELECT * FROM problems ${where} ORDER BY created_at DESC`, params);
   return res.rows;
 };
 
@@ -137,4 +139,39 @@ const deleteHint = async (hintId) => {
   await query('DELETE FROM problem_hints WHERE id = $1', [hintId]);
 };
 
-module.exports = { query, getClient, pool, getProblems, getTestCases, getSampleTestCases, getProblemById, addTestCase, deleteTestCase, getAllTestCases, ensureHintsTable, getHints, addHint, deleteHint };
+// Create a new problem
+const createProblem = async ({ title, slug, description, difficulty, tags, constraints, input_format, output_format, time_limit, memory_limit, is_published, problem_set }) => {
+  const res = await query(
+    `INSERT INTO problems (title, slug, description, difficulty, tags, constraints, input_format, output_format, time_limit, memory_limit, is_published, problem_set)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [title, slug, description, difficulty, tags || [], constraints, input_format, output_format, time_limit || 2000, memory_limit || 256, is_published || false, problem_set || 'none']
+  );
+  return res.rows[0];
+};
+
+// Update an existing problem
+const updateProblem = async (id, fields) => {
+  const { title, description, difficulty, tags, constraints, input_format, output_format, time_limit, memory_limit, is_published, problem_set } = fields;
+  const res = await query(
+    `UPDATE problems SET
+       title         = COALESCE($1, title),
+       description   = COALESCE($2, description),
+       difficulty    = COALESCE($3, difficulty),
+       tags          = COALESCE($4, tags),
+       constraints   = COALESCE($5, constraints),
+       input_format  = COALESCE($6, input_format),
+       output_format = COALESCE($7, output_format),
+       time_limit    = COALESCE($8, time_limit),
+       memory_limit  = COALESCE($9, memory_limit),
+       is_published  = COALESCE($10, is_published),
+       problem_set   = COALESCE($11, problem_set),
+       updated_at    = NOW()
+     WHERE id = $12 RETURNING *`,
+    [title, description, difficulty, tags ? JSON.stringify(tags) : null,
+     constraints, input_format, output_format, time_limit, memory_limit,
+     is_published, problem_set, id]
+  );
+  return res.rows[0] || null;
+};
+
+module.exports = { query, getClient, pool, getProblems, getTestCases, getSampleTestCases, getProblemById, addTestCase, deleteTestCase, getAllTestCases, ensureHintsTable, getHints, addHint, deleteHint, createProblem, updateProblem };

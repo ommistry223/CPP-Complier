@@ -185,6 +185,27 @@ submitQueue.process(SUBMIT_CONCURRENCY, async (job) => {
       `[${workerId}] /submit job ${job.id} verdict=${result.verdict} ` +
       `passed=${result.testCasesPassed}/${result.totalTestCases} time=${result.timeTaken}ms`
     );
+
+    // ── 6. Persist game submission to DB ─────────────────────
+    if (roomCode && teamId && problemId) {
+      try {
+        await pool.query(
+          `INSERT INTO game_submissions
+             (room_code, team_id, problem_id, language, code, verdict,
+              test_cases_passed, total_test_cases, time_taken)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [roomCode, teamId, problemId, language, code,
+           result.verdict,
+           result.testCasesPassed || 0,
+           result.totalTestCases  || 0,
+           result.timeTaken       || null]
+        );
+        logger.info(`[${workerId}] Saved game submission: room=${roomCode} team=${teamId} verdict=${result.verdict}`);
+      } catch (dbErr) {
+        logger.warn(`[${workerId}] DB save failed (non-fatal): ${dbErr.message}`);
+      }
+    }
+
     return result;
 
   } catch (err) {
