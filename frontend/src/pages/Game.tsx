@@ -393,7 +393,7 @@ export default function Game() {
     const loadQuestions = useCallback(() => {
         setQuestionsError(false);
         const tryFetch = (attempt: number): Promise<void> =>
-            axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems?published=true`)
+            axios.get(`${import.meta.env.VITE_API_URL || ''}/api/game/${state.room.code}/questions`)
                 .then(res => {
                     const list = res.data?.problems ?? (Array.isArray(res.data) ? res.data : null);
                     if (list && list.length > 0) {

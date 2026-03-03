@@ -146,13 +146,19 @@ async function adminStartGame(adminCode) {
  * forceStartRoom — used by tournament bulk-start.
  * Starts the room regardless of whether teams have joined.
  * Rooms that are already started or finished are skipped.
+ * @param {string} roomCode
+ * @param {string[]} [questionIds] - ordered list of problem IDs for this room
  */
-async function forceStartRoom(roomCode) {
+async function forceStartRoom(roomCode, questionIds) {
     const room = await loadRoom(roomCode);
     if (!room) return { error: 'Room not found' };
     if (room.phase !== 'waiting') return { skipped: true, reason: room.phase };
     room.phase = 'playing';
     room.questionStartedAt = Date.now();
+    if (Array.isArray(questionIds) && questionIds.length > 0) {
+        room.questionIds = questionIds;
+        room.questionCount = questionIds.length;
+    }
     await saveRoom(room);
     return { room };
 }

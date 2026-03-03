@@ -458,9 +458,14 @@ router.post('/tournaments/:id/start', async (req, res) => {
     if (!raw) return res.status(404).json({ error: 'Tournament not found' });
     const tournament = JSON.parse(raw);
 
+    // Use tournament's assigned questionIds if available
+    const tournamentQuestionIds = Array.isArray(tournament.questionIds) && tournament.questionIds.length > 0
+      ? tournament.questionIds
+      : null;
+
     let started = 0, skipped = 0;
     for (const roomCode of tournament.rooms) {
-      const result = await GameManager.forceStartRoom(roomCode);
+      const result = await GameManager.forceStartRoom(roomCode, tournamentQuestionIds);
       if (result.room) {
         started++;
         broadcastToRoom(roomCode, { type: 'game_started', room: result.room });
