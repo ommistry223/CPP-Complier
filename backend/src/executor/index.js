@@ -13,15 +13,73 @@ const logger       = require('../utils/logger');
 const LANGUAGES = {
   cpp: {
     extension: '.cpp',
-    compileArgs: (src, out) => ['-O2', '-std=c++17', '-Wno-unused-result', '-o', out, src],
+    // -pipe: use OS pipes between compiler stages (no intermediate temp files → faster,
+    //        especially on tmpfs RAM disks)
+    // -O1 vs -O2: compiles ~1.5× faster; correctness judging doesn't need peak optimisation
+    compileArgs: (src, out) => ['-pipe', '-O1', '-std=c++17', '-Wno-unused-result', '-o', out, src],
     compiler:   'g++',
   },
   c: {
     extension: '.c',
-    compileArgs: (src, out) => ['-O2', '-std=c11', '-Wno-unused-result', '-o', out, src],
+    compileArgs: (src, out) => ['-pipe', '-O1', '-std=c11', '-Wno-unused-result', '-o', out, src],
     compiler:   'gcc',
   },
 };
+
+/* ── Binary cache ───────────────────────────────────────────────
+   Compiled binaries are stored in bin_cache/<hash>.out (at /app/bin_cache
+   inside the container — regular overlay FS, always exec-capable) and
+   reused across submissions with identical source code.
+   Avoids the ~1-3s g++ step on every re-submission — very common
+   in contests where teams iterate on the same code.
+   In-memory LRU (max BIN_CACHE_MAX entries) guards the hot path.
+─────────────────────────────────────────────────────────────── */
+const BIN_CACHE_MAX = parseInt(process.env.BIN_CACHE_MAX) || 150;
+const _binCacheMap  = new Map();   // compileHash → { execPath, lastUsed }
+// bin_cache lives OUTSIDE the tmpfs mount (/app/temp) so compiled binaries
+// are on the regular container overlay FS, which is always exec-capable.
+// (Docker tmpfs can be mounted noexec by default, causing "Permission denied"
+//  when the shell tries to execute a newly compiled binary.)
+const _binCacheDir  = path.join(__dirname, '..', '..', 'bin_cache');
+
+// Create the cache directory once on module load
+fs.mkdir(_binCacheDir, { recursive: true }).catch(() => {});
+
+async function _getBinCache(hash) {
+  const entry = _binCacheMap.get(hash);
+  if (!entry) return null;
+  try {
+    await fs.access(entry.execPath);   // file must still exist on disk
+    entry.lastUsed = Date.now();
+    return entry.execPath;
+  } catch {
+    _binCacheMap.delete(hash);         // evict stale entry
+    return null;
+  }
+}
+
+function _putBinCache(hash, execPath) {
+  if (_binCacheMap.size >= BIN_CACHE_MAX) {
+    // LRU eviction: remove the least-recently-used entry
+    let oldestKey = null, oldestTime = Infinity;
+    for (const [k, v] of _binCacheMap) {
+      if (v.lastUsed < oldestTime) { oldestTime = v.lastUsed; oldestKey = k; }
+    }
+    if (oldestKey) {
+      const evicted = _binCacheMap.get(oldestKey);
+      _binCacheMap.delete(oldestKey);
+      fs.rm(evicted.execPath, { force: true }).catch(() => {});
+    }
+  }
+  _binCacheMap.set(hash, { execPath, lastUsed: Date.now() });
+}
+
+/* ── Compile deduplication ──────────────────────────────────────
+   If N teams submit identical code concurrently, only ONE g++
+   process fires. The rest await the same Promise and all get
+   the cached binary instantly when compilation finishes.
+─────────────────────────────────────────────────────────────── */
+const _compileInflight = new Map();  // compileHash → Promise<{success, error?}>
 
 /* ── Tuning constants ────────────────────────────────────────── */
 // Run test-cases in parallel up to this many at once.
@@ -60,15 +118,49 @@ class Executor {
     await fs.mkdir(this.baseDir, { recursive: true });
     const fileName  = `source${this.config.extension}`;
     this.sourceFile = path.join(this.baseDir, fileName);
-    this.executable = path.join(this.baseDir, 'solution.out');
+    // executable is set by compile() via the binary cache
+    this.executable = '';
     await fs.writeFile(this.sourceFile, this.code);
     logger.debug(`Prepared env ${this.runId} (${this.language.toUpperCase()})`);
   }
 
-  /* ── Compile (uses execFile — no shell overhead) ─────────────── */
-  compile() {
-    return new Promise((resolve) => {
-      const args = this.config.compileArgs(this.sourceFile, this.executable);
+  /* ── Compile ───────────────────────────────────────────────────
+     Three-tier fast path:
+     1. Binary cache HIT  → reuse existing .out file, skip g++ entirely
+     2. In-flight dedup   → identical code already compiling → share result
+     3. Compile + cache   → write binary to bin_cache/ for future reuse
+  ─────────────────────────────────────────────────────────────── */
+  async compile() {
+    // Key on language + code only — same source always produces same binary
+    const compileHash = crypto
+      .createHash('sha256')
+      .update(`${this.language}:${this.code}`)
+      .digest('hex');
+
+    // ── Tier 1: binary cache hit ────────────────────────────────
+    const cached = await _getBinCache(compileHash);
+    if (cached) {
+      this.executable = cached;
+      logger.debug(`[exec] bin-cache HIT ${compileHash.slice(0, 8)} — skipping g++`);
+      return { success: true };
+    }
+
+    // ── Tier 2: deduplicate concurrent identical compiles ───────
+    if (_compileInflight.has(compileHash)) {
+      logger.debug(`[exec] waiting for in-flight compile ${compileHash.slice(0, 8)}`);
+      const result = await _compileInflight.get(compileHash);
+      if (result.success) {
+        const refreshed = await _getBinCache(compileHash);
+        if (refreshed) { this.executable = refreshed; return { success: true }; }
+      }
+      return result;
+    }
+
+    // ── Tier 3: compile and store in binary cache ───────────────
+    const cacheTarget = path.join(_binCacheDir, `${compileHash}.out`);
+    const args = this.config.compileArgs(this.sourceFile, cacheTarget);
+
+    const compilePromise = new Promise((resolve) => {
       execFile(
         this.config.compiler,
         args,
@@ -86,6 +178,22 @@ class Executor {
         }
       );
     });
+
+    _compileInflight.set(compileHash, compilePromise);
+    try {
+      const result = await compilePromise;
+      if (result.success) {
+        // Ensure the binary has execute permission (required on Docker/Windows mounts
+        // where g++ may produce a file without the +x bit set).
+        await fs.chmod(cacheTarget, 0o755).catch(() => {});
+        _putBinCache(compileHash, cacheTarget);
+        this.executable = cacheTarget;
+        logger.debug(`[exec] compiled + cached ${compileHash.slice(0, 8)}`);
+      }
+      return result;
+    } finally {
+      _compileInflight.delete(compileHash);
+    }
   }
 
   /* ── Run ONE test-case with full sandboxing ───────────────────
@@ -215,6 +323,10 @@ class Executor {
       const wave = testCases.slice(i, i + MAX_CONCURRENT);
       const waveRes = await Promise.all(wave.map((tc, wi) => this._runOneTestCase(tc, i + wi)));
       for (const r of waveRes) results[r.idx] = r;
+
+      // ── Fail-fast: stop as soon as any test case in this wave failed ──
+      // Saves running remaining test cases when outcome is already known.
+      if (waveRes.some(r => r.status !== 'accepted')) break;
     }
 
     const total   = testCases.length;

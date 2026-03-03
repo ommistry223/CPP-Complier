@@ -1,0 +1,91 @@
+problem_slug,problem_title,difficulty,input,expected_output,is_sample,notes
+sum-two-numbers,Sum of Two Numbers,Easy,-1 1,0,FALSE,Negative + positive = 0
+sum-two-numbers,Sum of Two Numbers,Easy,100 200,300,FALSE,Large positive values
+sum-two-numbers,Sum of Two Numbers,Easy,1000000000 -1000000000,0,FALSE,Extreme boundary values
+max-three-numbers,Maximum of Three Numbers,Easy,10 5 7,10,FALSE,First is max
+max-three-numbers,Maximum of Three Numbers,Easy,-1 -2 -3,-1,FALSE,All negatives
+max-three-numbers,Maximum of Three Numbers,Easy,7 7 7,7,FALSE,All equal
+print-n-numbers,Print N Numbers,Easy,1,1,FALSE,Minimum N
+print-n-numbers,Print N Numbers,Easy,3,1 2 3,FALSE,Small N
+print-n-numbers,Print N Numbers,Easy,10,1 2 3 4 5 6 7 8 9 10,FALSE,N=10
+factorial,Factorial,Easy,10,3628800,FALSE,Large factorial
+factorial,Factorial,Easy,1,1,FALSE,1! = 1
+factorial,Factorial,Easy,12,479001600,FALSE,Maximum N=12
+fibonacci,Fibonacci Number,Easy,6,8,FALSE,F(6)=8
+fibonacci,Fibonacci Number,Easy,10,55,FALSE,F(10)=55
+fibonacci,Fibonacci Number,Easy,15,610,FALSE,F(15)=610
+fibonacci,Fibonacci Number,Easy,30,832040,FALSE,F(30) max boundary
+count-vowels,Count Vowels,Easy,xyz,0,FALSE,No vowels
+count-vowels,Count Vowels,Easy,AEIOU,5,FALSE,Uppercase vowels
+count-vowels,Count Vowels,Easy,The quick brown fox,5,FALSE,Mixed sentence
+reverse-string,Reverse a String,Easy,abcde,edcba,FALSE,5 chars
+reverse-string,Reverse a String,Easy,racecar,racecar,FALSE,Palindrome reversed = same
+reverse-string,Reverse a String,Easy,a,a,FALSE,Single character
+check-palindrome,Check Palindrome,Easy,abcba,YES,FALSE,5-char palindrome
+check-palindrome,Check Palindrome,Easy,abc,NO,FALSE,Not palindrome
+check-palindrome,Check Palindrome,Easy,a,YES,FALSE,Single char is palindrome
+check-palindrome,Check Palindrome,Easy,abcdef,NO,FALSE,Even length non-palindrome
+right-triangle-star,Right Triangle Star Pattern,Easy,3,"*
+**
+***",FALSE,N=3
+right-triangle-star,Right Triangle Star Pattern,Easy,5,"*
+**
+***
+****
+*****",FALSE,N=5
+inverted-triangle-star,Inverted Triangle Star Pattern,Easy,3,"***
+**
+*",FALSE,N=3
+inverted-triangle-star,Inverted Triangle Star Pattern,Easy,5,"*****
+****
+***
+**
+*",FALSE,N=5
+number-triangle,Number Triangle Pattern,Easy,3,"1
+1 2
+1 2 3",FALSE,N=3
+number-triangle,Number Triangle Pattern,Easy,5,"1
+1 2
+1 2 3
+1 2 3 4
+1 2 3 4 5",FALSE,N=5 full triangle
+star-pyramid,Star Pyramid Pattern,Easy,3,"  *
+ ***
+*****",FALSE,N=3 pyramid
+star-pyramid,Star Pyramid Pattern,Easy,5,"    *
+   ***
+  *****
+ *******
+*********",FALSE,N=5 pyramid
+diamond-star,Diamond Star Pattern,Easy,3," *
+***
+ *",FALSE,N=3 diamond
+diamond-star,Diamond Star Pattern,Easy,7,"   *
+  ***
+ *****
+*******
+ *****
+  ***
+   *",FALSE,N=7 larger diamond
+floyds-triangle,Floyd's Triangle,Easy,3,"1
+2 3
+4 5 6",FALSE,N=3 Floyd
+floyds-triangle,Floyd's Triangle,Easy,5,"1
+2 3
+4 5 6
+7 8 9 10
+11 12 13 14 15",FALSE,N=5 Floyd
+hollow-rectangle,Hollow Rectangle Pattern,Easy,3 4,"****
+*  *
+****",FALSE,R=3 C=4
+hollow-rectangle,Hollow Rectangle Pattern,Easy,5 5,"*****
+*   *
+*   *
+*   *
+*****",FALSE,5x5 square
+hollow-rectangle,Hollow Rectangle Pattern,Easy,2 7,"*******
+*******",FALSE,"R=2, all rows are border"
+pascals-triangle-row,Pascal's Triangle Row,Easy,3,1 3 3 1,FALSE,Row 3
+pascals-triangle-row,Pascal's Triangle Row,Easy,5,1 5 10 10 5 1,FALSE,Row 5
+pascals-triangle-row,Pascal's Triangle Row,Easy,7,1 7 21 35 35 21 7 1,FALSE,Row 7
+pascals-triangle-row,Pascal's Triangle Row,Easy,10,1 10 45 120 210 252 210 120 45 10 1,FALSE,Maximum row

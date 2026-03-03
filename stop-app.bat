@@ -34,5 +34,9 @@ echo ===================================================
 echo.
 echo To restart:        run.bat
 echo To wipe ALL data:  docker compose down -v
+echo.
+echo Ports when running:
+echo   App:      http://localhost:8080
+echo   pgAdmin:  http://localhost:5050
 echo ===================================================
 pause

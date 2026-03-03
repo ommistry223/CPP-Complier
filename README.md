@@ -32,8 +32,8 @@ Everything runs inside Docker containers.
 1. Install **Docker Desktop** and make sure it is running (whale icon in system tray).
 2. Double-click **``setup.bat``** - builds all images and initialises the database (run once only).
 3. Double-click **``run.bat``** - starts all services in the background.
-4. Open **http://localhost** in your browser.
-5. Open **http://localhost/admin_panel** for the admin panel.
+4. Open **http://localhost:8080** in your browser.
+5. Open **http://localhost:8080/admin_panel** for the admin panel.
 
 ### Starting after setup
 
@@ -44,6 +44,16 @@ Just double-click **``run.bat``** every time you want to start Code Arena.
 Double-click **``stop-app.bat``** or run ``docker compose down`` in a terminal.
 
 To wipe all data (rooms, problems): ``docker compose down -v``
+
+---
+
+## URLs
+
+| Service | URL |
+|---------|-----|
+| Platform | http://localhost:8080 |
+| Admin Panel | http://localhost:8080/admin_panel |
+| pgAdmin (DB UI) | http://localhost:5050 (admin@codearena.dev / admin123) |
 
 ---
 
@@ -60,13 +70,15 @@ To wipe all data (rooms, problems): ``docker compose down -v``
 ## Architecture Overview
 
 ```
-nginx (load balancer :80)
-  +-- api1 (Node.js / Express / WebSocket)
+nginx (load balancer :8080)
+  +-- api1 (Node.js / Express / WebSocket / GameManager)
+  +-- api2 (Node.js / Express — compiler + problems routes only)
   +-- frontend (React/Vite, served by nginx)
   +-- pgbouncer (PostgreSQL connection pooler)
         +-- db (PostgreSQL 15)
-redis   (Bull queue + in-memory room state)
-worker x3 (Bull job processors in isolated containers)
+redis   (Bull queue + in-memory room state + verdict cache)
+worker x3 (Bull job processors — compiler + submit queues)
+pgadmin :5050 (DB admin UI)
 ```
 
 ## Game Flow

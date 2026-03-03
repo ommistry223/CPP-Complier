@@ -167,3 +167,48 @@ All services start in the correct order (db &rarr; redis &rarr; pgbouncer &rarr;
 - `README.md` rewritten as a Docker-first quickstart guide.
 - Single prerequisite: Docker Desktop.
 - Updated game flow section (no score references, knife phase documented, winner criteria).
+
+---
+
+## Version 12 - Performance Overhaul, Load Scaling & Upstream Merge
+
+### Root Cause Fix — 80-Team Load Test (0% Judged Rate)
+The platform was running compilation inline on the API event loop with no process cap, causing 307 network errors and 93 TLEs at 80-team load.
+- **`/submit` moved to Bull queue** (`submitQueue` in `compilerJobs.js`): submissions no longer block the API event loop.
+- **Global process semaphore** in executor prevents fork-bombing under burst load.
+- **api2 replica** added — nginx now load-balances `/api/compiler/*` and `/api/problems/*` across `api1` and `api2` using `least_conn`.
+- **Fail-fast `runBatch`**: stops test-case execution immediately on the first failing wave instead of running all TCs.
+
+### Compilation Performance Optimisations
+- **Binary cache** (`_binCacheMap`, LRU up to `BIN_CACHE_MAX=150` entries): compiled binaries stored in `temp/bin_cache/` — identical code never recompiles twice.
+- **Compile deduplication** (`_compileInflight` Map): if N teams submit the same code simultaneously, only 1 `g++` process runs; all N futures wait on the same Promise.
+- **Compiler flags** changed to `-pipe -O1`: `-pipe` avoids temp files between stages, `-O1` is faster than `-O2` with negligible output quality difference for judging.
+- **Bull job dedup** via `jobId: payload.cacheKey` — identical concurrent submits share one Bull job, not just one compile process.
+- **All deterministic verdicts cached** (AC, WA, CE) in Redis for 1 hour — previously only AC was cached.
+
+### Infrastructure Changes
+- **Workers scaled to 3 replicas** (`deploy.replicas: 3`), up from 2; new env vars: `WORKER_CONCURRENCY=20`, `SUBMIT_CONCURRENCY=12`, `TC_CONCURRENCY=16`, `BIN_CACHE_MAX=150`.
+- **tmpfs RAM mounts** added: worker uses `512m` tmpfs at `/app/temp`; api1 and api2 each use `128m`. All compiled binaries, source files, and test I/O live in RAM — no disk I/O, no stale temp files on restart.
+- **Redis hardened**: `--maxmemory 512mb --maxmemory-policy allkeys-lru --save "" --appendonly no` — capped memory, auto-eviction, persistence disabled for speed.
+- **Port changed from 80 → 8080**: `load_balancer` now exposes `8080:80`. All URLs updated.
+- **pgadmin added** at port `5050` (login: `admin@codearena.dev` / `admin123`) — pre-configured to connect to the `db` container automatically via `pgadmin/servers.json`.
+
+### Friend's Executor Improvements (ommistry223 — merged from upstream)
+Upstream commits `000d8e9` and `829c017` (PRs #3 and #4) rewrote the executor and added new frontend screens:
+- **`execFile` instead of `exec`**: no shell spawning overhead, binary invoked directly.
+- **`ulimit -v`** memory cap per process: `MAX_MEMORY_MB * 1024` KB enforced at OS level.
+- **`ulimit -t`** CPU time cap per process.
+- **Process group kill**: executor spawns with `detached: true` and kills via `process.kill(-pid, 'SIGKILL')` to guarantee child processes are also terminated.
+- **Dynamic `MAX_CONCURRENT`**: auto-scales to `min(TC_CONCURRENCY || cpus*2, 32)` at startup.
+- **`submitQueue` merged into `compilerJobs.js`**: both `compilerQueue` (for `/run`) and `submitQueue` (for `/submit`) now live in one file. Separate `submitJobs.js` was removed.
+
+### New Frontend Components (ommistry223)
+- **`BattleIntro.tsx / .css`**: animated battle intro screen shown before the game starts.
+- **`LoadingScreen.tsx / .css`**: loading screen component for async transitions.
+- **Lobby redesign** (`Lobby.tsx / Lobby.css`): ~800 lines of CSS, tournament-ready lobby UI.
+- **`Game.tsx`**, **`Admin.tsx / Admin.css`**, **`Leaderboard.tsx / Leaderboard.css`**: updated layouts and styles.
+
+### Bat File Fixes (this version)
+- **`setup.bat`**: fixed service name `api` → `api1`; added `pgbouncer` to startup before migrations; replaced fixed `timeout` with a health-check polling loop (up to 60s); updated all URLs to port `8080`; added pgadmin credentials.
+- **`run.bat`**: updated all URLs from `http://localhost` → `http://localhost:8080`; added pgadmin info line.
+- **`stop-app.bat`**: added port reference block so users remember the correct URLs when they restart.

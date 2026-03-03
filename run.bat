@@ -38,8 +38,9 @@ echo ===================================================
 echo  CODE ARENA IS LIVE!
 echo ===================================================
 echo.
-echo   Platform:    http://localhost
-echo   Admin Panel: http://localhost/admin_panel
+echo   Platform:    http://localhost:8080
+echo   Admin Panel: http://localhost:8080/admin_panel
+echo   DB Admin:    http://localhost:5050  (login: admin@codearena.dev / admin123)
 echo.
 echo To stop: run stop-app.bat  (or: docker compose down)
 echo ===================================================

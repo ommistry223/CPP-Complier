@@ -29,7 +29,9 @@ const migrations = [
 
     // Migration 2: Problems
     `
-  CREATE TYPE difficulty_level AS ENUM ('Easy', 'Medium', 'Hard');
+  DO $$ BEGIN
+    CREATE TYPE difficulty_level AS ENUM ('Easy', 'Medium', 'Hard');
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
   CREATE TABLE IF NOT EXISTS problems (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -74,11 +76,13 @@ const migrations = [
 
     // Migration 4: Submissions
     `
-  CREATE TYPE submission_status AS ENUM (
-    'pending', 'queued', 'running', 'accepted', 'wrong_answer',
-    'time_limit_exceeded', 'memory_limit_exceeded', 'runtime_error',
-    'compilation_error', 'system_error'
-  );
+  DO $$ BEGIN
+    CREATE TYPE submission_status AS ENUM (
+      'pending', 'queued', 'running', 'accepted', 'wrong_answer',
+      'time_limit_exceeded', 'memory_limit_exceeded', 'runtime_error',
+      'compilation_error', 'system_error'
+    );
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
   CREATE TABLE IF NOT EXISTS submissions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -112,7 +116,9 @@ const migrations = [
 
     // Migration 5: Contests
     `
-  CREATE TYPE contest_status AS ENUM ('draft', 'upcoming', 'active', 'ended');
+  DO $$ BEGIN
+    CREATE TYPE contest_status AS ENUM ('draft', 'upcoming', 'active', 'ended');
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
   CREATE TABLE IF NOT EXISTS contests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -1,0 +1,53 @@
+problem_slug,problem_title,difficulty,input,expected_output,is_sample,notes
+print-hello-world,Print Hello World,Easy,,Hello World!,TRUE,No input required
+sum-two-numbers,Sum of Two Numbers,Easy,2 3,5,TRUE,Basic positive sum
+max-three-numbers,Maximum of Three Numbers,Easy,1 2 3,3,TRUE,Ascending order
+print-n-numbers,Print N Numbers,Easy,5,1 2 3 4 5,TRUE,Print 1 to N space-separated
+factorial,Factorial,Easy,5,120,TRUE,5! = 120
+factorial,Factorial,Easy,0,1,TRUE,Edge case: 0! = 1
+fibonacci,Fibonacci Number,Easy,0,0,TRUE,F(0) = 0
+fibonacci,Fibonacci Number,Easy,1,1,TRUE,F(1) = 1
+count-vowels,Count Vowels,Easy,Hello World,3,TRUE,e, o, o are vowels
+count-vowels,Count Vowels,Easy,aeiou,5,TRUE,All 5 vowels
+reverse-string,Reverse a String,Easy,hello,olleh,TRUE,Simple reverse
+check-palindrome,Check Palindrome,Easy,racecar,YES,TRUE,Is a palindrome
+check-palindrome,Check Palindrome,Easy,hello,NO,TRUE,Not a palindrome
+right-triangle-star,Right Triangle Star Pattern,Easy,4,"*
+**
+***
+****",TRUE,"N=4, 4 rows of stars"
+right-triangle-star,Right Triangle Star Pattern,Easy,1,*,TRUE,Minimum input edge case
+inverted-triangle-star,Inverted Triangle Star Pattern,Easy,4,"****
+***
+**
+*",TRUE,"N=4, inverted rows"
+inverted-triangle-star,Inverted Triangle Star Pattern,Easy,1,*,TRUE,Single row edge case
+number-triangle,Number Triangle Pattern,Easy,4,"1
+1 2
+1 2 3
+1 2 3 4",TRUE,Numbers fill each row
+number-triangle,Number Triangle Pattern,Easy,1,1,TRUE,Single row
+star-pyramid,Star Pyramid Pattern,Easy,4,"   *
+  ***
+ *****
+*******",TRUE,Centred pyramid with leading spaces
+star-pyramid,Star Pyramid Pattern,Easy,1,*,TRUE,Single row pyramid
+diamond-star,Diamond Star Pattern,Easy,5,"  *
+ ***
+*****
+ ***
+  *",TRUE,N=5 diamond (odd only)
+diamond-star,Diamond Star Pattern,Easy,1,*,TRUE,Minimum diamond
+floyds-triangle,Floyd's Triangle,Easy,4,"1
+2 3
+4 5 6
+7 8 9 10",TRUE,Numbers fill row by row
+floyds-triangle,Floyd's Triangle,Easy,1,1,TRUE,Single row Floyd
+hollow-rectangle,Hollow Rectangle Pattern,Easy,4 6,"******
+*    *
+*    *
+******",TRUE,"R=4 C=6, hollow border"
+hollow-rectangle,Hollow Rectangle Pattern,Easy,2 3,"***
+***",TRUE,"2 rows = all border, no hollow"
+pascals-triangle-row,Pascal's Triangle Row,Easy,4,1 4 6 4 1,TRUE,Row index 4
+pascals-triangle-row,Pascal's Triangle Row,Easy,0,1,TRUE,Row 0 = [1]

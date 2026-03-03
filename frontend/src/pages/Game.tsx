@@ -30,6 +30,25 @@ interface Room {
 const TEAM_COLORS = { A: '#3b82f6', B: '#8b5cf6' };
 const TEAM_BG = { A: 'rgba(59, 130, 246, 0.06)', B: 'rgba(139, 92, 246, 0.06)' };
 
+// ── Refresh persistence helpers ───────────────────────────────
+const SESSION_KEY = 'ca_game_state';
+type GameNavState = { room: Room; myTeam: 'A' | 'B'; teamCode: string; teamName: string };
+function loadGameSession(): GameNavState | null {
+    try { const s = sessionStorage.getItem(SESSION_KEY); return s ? JSON.parse(s) as GameNavState : null; } catch { return null; }
+}
+function codeKey(roomCode: string, qIdx: number, team: string, lang: string) {
+    return `ca_code_${roomCode}_q${qIdx}_${team}_${lang}`;
+}
+function loadCode(roomCode: string, qIdx: number, team: string, lang: string): string | null {
+    try { return localStorage.getItem(codeKey(roomCode, qIdx, team, lang)); } catch { return null; }
+}
+function saveCode(roomCode: string, qIdx: number, team: string, lang: string, code: string) {
+    try { localStorage.setItem(codeKey(roomCode, qIdx, team, lang), code); } catch {}
+}
+function clearCode(roomCode: string, qIdx: number, team: string, lang: string) {
+    try { localStorage.removeItem(codeKey(roomCode, qIdx, team, lang)); } catch {}
+}
+
 const CPP_TEMPLATE = `#include <bits/stdc++.h>
 using namespace std;
 
@@ -226,7 +245,16 @@ const handleEditorBeforeMount = (monaco: any) => {
 export default function Game() {
     const location = useLocation();
     const navigate = useNavigate();
-    const state = location.state as { room: Room; myTeam: 'A' | 'B'; teamCode: string; teamName: string } | null;
+    // On refresh location.state is null — fall back to sessionStorage
+    const rawState = location.state as GameNavState | null;
+    const state = rawState ?? loadGameSession();
+
+    // Persist state to sessionStorage whenever we have it from the router
+    useEffect(() => {
+        if (rawState) {
+            try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(rawState)); } catch {}
+        }
+    }, [rawState]);
 
     useEffect(() => { if (!state) navigate('/'); }, [state, navigate]);
     if (!state) return null;
@@ -396,12 +424,14 @@ export default function Game() {
         setSubmitOutput('');
         setSubmitDetail(null);
         setExecTime(null);
-        // Reset editor to blank template for new question
+        // Restore saved code for this question, or fall back to template
+        const initialCode = loadCode(room.code, room.currentQuestionIdx, myTeam, langChoice)
+            ?? (langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE);
         setRoom(prev => ({
             ...prev,
             teams: {
                 ...prev.teams,
-                [myTeam]: { ...prev.teams[myTeam], code: langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE }
+                [myTeam]: { ...prev.teams[myTeam], code: initialCode }
             }
         }));
 
@@ -420,13 +450,15 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, room.currentQuestionIdx]);
 
-    // Reset editor code when language is changed
+    // When language switches, restore saved code for that lang or fall back to template
     useEffect(() => {
+        const saved = loadCode(room.code, room.currentQuestionIdx, myTeam, langChoice)
+            ?? (langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE);
         setRoom(prev => ({
             ...prev,
             teams: {
                 ...prev.teams,
-                [myTeam]: { ...prev.teams[myTeam], code: langChoice === 'c' ? C_TEMPLATE : CPP_TEMPLATE }
+                [myTeam]: { ...prev.teams[myTeam], code: saved }
             }
         }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -470,6 +502,8 @@ export default function Game() {
                 [myTeam]: { ...prev.teams[myTeam], code: newCode }
             }
         }));
+        // Persist to localStorage so refresh doesn't lose code
+        saveCode(room.code, room.currentQuestionIdx, myTeam, langChoice, newCode);
         send('player_typing', { isTyping: true });
     };
 
@@ -543,6 +577,8 @@ export default function Game() {
             setSubmitOutput(detail || verdict);
             if (verdict === 'accepted') {
                 setSubmitStatus('accepted');
+                // Clear saved code for this question so next attempt starts fresh
+                clearCode(room.code, submittingQIdx, myTeam, langChoice);
                 // Notify the game server — triggers grid pick
                 send('question_solved', { questionIdx: submittingQIdx });
                 showToast(`✅ Accepted! ${testCasesPassed}/${totalTestCases} test cases passed`, 'success');
@@ -970,7 +1006,7 @@ export default function Game() {
                                         submitStatus === 'accepted' ? 'success' :
                                         submitStatus === 'rejected' || submitStatus === 'error' ? 'error' : ''
                                     }`}>
-                                        <pre>{submitOutput || 'Press Submit to run against all hidden test cases.'}</pre>
+                                        <pre style={{ margin: 0 }}>{submitOutput || 'Press Submit to run against all hidden test cases.'}</pre>
                                     </div>
                                 </div>
                             )}
