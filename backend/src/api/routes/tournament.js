@@ -3,10 +3,46 @@ const router = express.Router();
 const { randomBytes } = require('crypto');
 const GameManager = require('../../game/GameManager');
 const redisClient = require('../../cache/redis');
+const db = require('../../db');
 const logger = require('../../utils/logger');
 const { broadcastToRoom } = require('../../utils/broadcaster');
 
 const rand = (n) => randomBytes(n).toString('hex').toUpperCase();
+
+/** Get tournament from Redis; if missing, reload from PostgreSQL and re-cache */
+async function getTournament(id) {
+  const raw = await redisClient.get(`tournament:${id}`);
+  if (raw) return JSON.parse(raw);
+
+  try {
+    const { rows } = await db.query('SELECT * FROM tournaments WHERE id=$1', [id]);
+    if (!rows.length) return null;
+    const row = rows[0];
+    const t = {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      questionCount: row.question_count,
+      status: row.status,
+      visibility: row.visibility,
+      maxTeams: row.max_teams,
+      enableLeaderboard: row.enable_leaderboard,
+      enableBonus: row.enable_bonus,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      startedAt: row.started_at ? Number(row.started_at) : null,
+      rooms: row.rooms || [],
+      pairs: row.pairs || [],
+      questionIds: row.question_ids || [],
+      createdAt: Number(row.created_at),
+    };
+    // Re-populate Redis cache
+    await redisClient.set(`tournament:${id}`, JSON.stringify(t), 'EX', 7 * 86400);
+    return t;
+  } catch {
+    return null;
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════
    POST /api/tournament/bulk-create
@@ -37,21 +73,47 @@ router.post('/bulk-create', async (req, res) => {
         const pairs_data = await Promise.all(roomPromises);
         results.push(...pairs_data);
 
-        // Store tournament in Redis (24h TTL)
+        // Store tournament in Redis (7-day TTL) AND PostgreSQL (permanent)
         const tournamentData = {
             id: tournamentId,
             name,
+            description: '',
             questionCount,
+            status: 'upcoming',
+            visibility: 'private',
+            maxTeams: pairs * 2,
+            enableLeaderboard: true,
+            enableBonus: true,
+            startDate: null,
+            endDate: null,
+            startedAt: null,
+            questionIds: [],
             createdAt: Date.now(),
             rooms: pairs_data.map(p => p.roomCode),
             pairs: pairs_data,
         };
-        await redisClient.set(
-            `tournament:${tournamentId}`,
-            JSON.stringify(tournamentData),
-            'EX',
-            86400
-        );
+        await Promise.all([
+            redisClient.set(
+                `tournament:${tournamentId}`,
+                JSON.stringify(tournamentData),
+                'EX',
+                7 * 86400
+            ),
+            db.query(
+                `INSERT INTO tournaments
+                   (id, name, description, question_count, status, visibility, max_teams,
+                    enable_leaderboard, enable_bonus, start_date, end_date, started_at,
+                    rooms, pairs, question_ids, created_at)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                 ON CONFLICT (id) DO NOTHING`,
+                [
+                    tournamentData.id, tournamentData.name, '', tournamentData.questionCount,
+                    'upcoming', 'private', pairs * 2, true, true, null, null, null,
+                    JSON.stringify(tournamentData.rooms), JSON.stringify(tournamentData.pairs),
+                    JSON.stringify([]), tournamentData.createdAt,
+                ]
+            ).catch(err => logger.warn('bulk-create DB insert skipped:', err.message)),
+        ]);
 
         logger.info(`Tournament ${tournamentId} created with ${pairs} rooms`);
 
@@ -78,10 +140,8 @@ router.post('/bulk-create', async (req, res) => {
 ═══════════════════════════════════════════════════════════ */
 router.post('/:id/notify-countdown', async (req, res) => {
     try {
-        const data = await redisClient.get(`tournament:${req.params.id}`);
-        if (!data) return res.status(404).json({ error: 'Tournament not found' });
-
-        const tournament = JSON.parse(data);
+        const tournament = await getTournament(req.params.id);
+        if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
         const seconds = Math.min(Math.max(parseInt(req.body.seconds) || 30, 5), 60);
         const endsAt = Date.now() + seconds * 1000;
 
@@ -114,10 +174,8 @@ router.post('/:id/notify-countdown', async (req, res) => {
 ═══════════════════════════════════════════════════════════ */
 router.post('/:id/start', async (req, res) => {
     try {
-        const data = await redisClient.get(`tournament:${req.params.id}`);
-        if (!data) return res.status(404).json({ error: 'Tournament not found' });
-
-        const tournament = JSON.parse(data);
+        const tournament = await getTournament(req.params.id);
+        if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
         const started = [];
         const skipped = [];
         const errors  = [];
@@ -165,10 +223,8 @@ router.post('/:id/start', async (req, res) => {
 ═══════════════════════════════════════════════════════════ */
 router.get('/:id/leaderboard', async (req, res) => {
     try {
-        const data = await redisClient.get(`tournament:${req.params.id}`);
-        if (!data) return res.status(404).json({ error: 'Tournament not found' });
-
-        const tournament = JSON.parse(data);
+        const tournament = await getTournament(req.params.id);
+        if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
         // Fetch all room states in parallel
         const roomStates = await Promise.all(
@@ -219,9 +275,8 @@ router.get('/:id/leaderboard', async (req, res) => {
 ═══════════════ */
 router.get('/:id', async (req, res) => {
     try {
-        const data = await redisClient.get(`tournament:${req.params.id}`);
-        if (!data) return res.status(404).json({ error: 'Tournament not found' });
-        const tournament = JSON.parse(data);
+        const tournament = await getTournament(req.params.id);
+        if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
         res.json({ status: 'ok', tournament });
     } catch (err) {
         res.status(500).json({ error: err.message });

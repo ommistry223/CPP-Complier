@@ -100,6 +100,47 @@
     color: #ef4444;
 }
 
+/* Game countdown pill — blue tinted, bigger, shows remaining game time */
+.game-countdown-pill {
+    background: #fff;
+    border-color: #6366f1;
+    padding: 7px 20px;
+    gap: 10px;
+}
+.game-countdown-pill .timer-icon { color: #6366f1; }
+.game-countdown-pill .timer-val  { color: #4f46e5; font-size: 1.1rem; }
+.game-countdown-pill.warn .timer-icon,
+.game-countdown-pill.warn .timer-val { color: #d97706; }
+.game-countdown-pill.warn { border-color: #f59e0b; }
+.game-countdown-pill.alert .timer-icon,
+.game-countdown-pill.alert .timer-val { color: #ef4444; }
+.game-countdown-pill.alert { border-color: #ef4444; }
+
+/* Per-question countdown pill — orange scheme */
+.question-cd-pill {
+    background: #fff;
+    border-color: #f97316;
+    padding: 7px 20px;
+    gap: 10px;
+}
+.question-cd-pill .timer-icon { color: #f97316; }
+.question-cd-pill .timer-val  { color: #ea6800; font-size: 1.1rem; }
+.question-cd-pill.warn .timer-icon,
+.question-cd-pill.warn .timer-val { color: #d97706; }
+.question-cd-pill.warn { border-color: #f59e0b; }
+.question-cd-pill.alert .timer-icon,
+.question-cd-pill.alert .timer-val { color: #ef4444; }
+.question-cd-pill.alert { border-color: #ef4444; }
+
+/* "/ 60 min" sub-label inside the countdown pill */
+.timer-total {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94a3b8;
+    letter-spacing: 0.02em;
+    margin-left: 2px;
+}
+
 .pro-timer-pill.warn .timer-val {
     color: #ef4444;
 }
@@ -395,6 +436,90 @@
     border-bottom: 1px solid var(--pro-border);
     margin-bottom: 20px;
 }
+
+/* ── Per-question countdown bar ─────────────────────────────── */
+.q-timer-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1.5px solid #f97316;
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+}
+.q-timer-bar.warn {
+    background: #fff7ed;
+    border-color: #f59e0b;
+}
+.q-timer-bar.danger {
+    background: #fff1f2;
+    border-color: #ef4444;
+    animation: timerBarPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes timerBarPulse {
+    from { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    to   { box-shadow: 0 0 8px 2px rgba(239,68,68,0.25); }
+}
+.q-timer-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+.q-timer-icon {
+    color: #f97316;
+    flex-shrink: 0;
+}
+.q-timer-bar.warn  .q-timer-icon { color: #d97706; }
+.q-timer-bar.danger .q-timer-icon { color: #ef4444; }
+.q-timer-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #92400e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.q-timer-bar.warn  .q-timer-label { color: #92400e; }
+.q-timer-bar.danger .q-timer-label { color: #b91c1c; }
+.q-timer-countdown {
+    font-size: 1.65rem;
+    font-weight: 900;
+    letter-spacing: -1px;
+    color: #ea580c;
+    font-feature-settings: 'tnum';
+    font-variant-numeric: tabular-nums;
+    min-width: 70px;
+    text-align: right;
+}
+.q-timer-bar.warn  .q-timer-countdown { color: #d97706; }
+.q-timer-bar.danger .q-timer-countdown { color: #dc2626; }
+.q-timer-progress-wrap {
+    width: 100%;
+    height: 4px;
+    background: #fed7aa;
+    border-radius: 99px;
+    overflow: hidden;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+.q-timer-bar.warn  .q-timer-progress-wrap { background: #fde68a; }
+.q-timer-bar.danger .q-timer-progress-wrap { background: #fecaca; }
+.q-timer-progress-fill {
+    height: 100%;
+    background: #f97316;
+    border-radius: 99px;
+    transition: width 0.9s linear;
+}
+.q-timer-bar.warn  .q-timer-progress-fill { background: #f59e0b; }
+.q-timer-bar.danger .q-timer-progress-fill { background: #ef4444; }
 
 .q-title {
     font-size: 1.45rem;
@@ -1242,40 +1367,129 @@
 .pro-end-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.88);
     z-index: 2000;
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
+    animation: fadeIn 0.3s ease;
 }
 
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 .pro-end-card {
-    padding: 60px;
+    padding: 48px 56px;
     border-radius: 20px;
     text-align: center;
     background: #ffffff;
     border: 1px solid var(--pro-border);
-    box-shadow: 0 25px 80px rgba(0,0,0,0.25);
+    box-shadow: 0 25px 80px rgba(0,0,0,0.3);
+    min-width: 420px;
+    max-width: 560px;
+    width: 100%;
+    animation: slideUp 0.35s cubic-bezier(.22,.68,0,1.2);
 }
+
+@keyframes slideUp { from { transform: translateY(32px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.end-trophy { margin-bottom: 16px; filter: drop-shadow(0 0 16px rgba(245,158,11,0.5)); }
+
+.end-icon-draw   { font-size: 4rem; margin-bottom: 12px; line-height: 1; }
+.end-icon-defeat { font-size: 4rem; margin-bottom: 12px; line-height: 1; }
 
 .end-title {
-    font-size: 3.5rem;
+    font-size: 3rem;
     font-weight: 900;
-    margin-bottom: 30px;
+    letter-spacing: 0.06em;
+    margin: 0 0 8px;
 }
+.end-title.win  { color: #f59e0b; text-shadow: 0 0 32px rgba(245,158,11,0.35); }
+.end-title.draw { color: #64748b; }
+.end-title.loss { color: #ef4444; }
 
-.end-scores {
-    display: flex;
-    gap: 40px;
-    justify-content: center;
-    margin-bottom: 40px;
-}
+.end-subtitle { color: #64748b; font-size: 0.95rem; margin: 0 0 20px; }
 
-.es-team {
+/* Score table */
+.end-score-table {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0;
+    margin: 24px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.est-vs {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #cbd5e1;
+    background: #f8fafc;
+    padding: 4px 0;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.est-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: #ffffff;
+    transition: background 0.2s;
+}
+.est-row.est-winner { background: rgba(245,158,11,0.06); }
+
+.est-name {
+    font-weight: 700;
+    font-size: 1rem;
+    flex: 1;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.est-crown { font-size: 0.9rem; }
+
+.est-stat {
+    font-size: 0.82rem;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-variant-numeric: tabular-nums;
+}
+
+.est-badge {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+.est-badge-win  { background: rgba(245,158,11,0.15); color: #b45309; }
+.est-badge-draw { background: rgba(100,116,139,0.12); color: #64748b; }
+
+.end-personal {
+    font-size: 0.9rem;
+    color: #475569;
+    margin: 4px 0 0;
+    line-height: 1.6;
+}
+
+/* Countdown pill beside the question timer */
+.countdown-pill {
+    margin-left: 8px;
+}
+.countdown-pill::before {
+    content: 'ENDS ';
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+    margin-right: 2px;
 }
 
 /* Animations */

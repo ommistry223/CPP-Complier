@@ -38,6 +38,8 @@ interface Tournament {
   enableLeaderboard?: boolean; enableBonus?: boolean;
   visibility?: string;
   questionIds?: string[];
+  timeLimitMinutes?: number | null;
+  questionTimeLimitSeconds?: number | null;
 }
 
 interface TournamentPair {
@@ -339,6 +341,9 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
   const [t, setT] = useState(tournament);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [timeLimitInput, setTimeLimitInput] = useState(String(tournament.timeLimitMinutes || ''));
+  const [questionTimeLimitInput, setQuestionTimeLimitInput] = useState(String(tournament.questionTimeLimitSeconds || ''));
+  const [extendInput, setExtendInput] = useState('5');
 
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
@@ -348,13 +353,43 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
   const startTournament = async () => {
     setStarting(true);
     try {
-      await axios.post(API(`/tournaments/${t.id}/start`));
-      setT(p => ({ ...p, status: 'live' }));
+      const timeLimitMinutes = timeLimitInput ? parseInt(timeLimitInput, 10) : undefined;
+      const questionTimeLimitSeconds = questionTimeLimitInput ? parseInt(questionTimeLimitInput, 10) : undefined;
+      await axios.post(API(`/tournaments/${t.id}/start`), { timeLimitMinutes, questionTimeLimitSeconds });
+      setT(p => ({
+        ...p,
+        status: 'live',
+        timeLimitMinutes: timeLimitMinutes ?? p.timeLimitMinutes,
+        questionTimeLimitSeconds: questionTimeLimitSeconds ?? p.questionTimeLimitSeconds,
+      }));
       toast('All rooms started!', 'success');
     } catch (e: any) {
       toast(e.response?.data?.error || 'Failed to start', 'error');
     }
     setStarting(false);
+  };
+
+  const setTimeLimit = async () => {
+    const minutes = parseInt(timeLimitInput, 10);
+    if (!minutes || minutes < 1) { toast('Enter a valid number of minutes', 'error'); return; }
+    try {
+      await axios.post(API(`/tournaments/${t.id}/set-time-limit`), { minutes });
+      setT(p => ({ ...p, timeLimitMinutes: minutes }));
+      toast(`Time limit set to ${minutes} min`, 'success');
+    } catch (e: any) {
+      toast(e.response?.data?.error || 'Failed to set time limit', 'error');
+    }
+  };
+
+  const extendTime = async () => {
+    const extraMinutes = parseInt(extendInput, 10);
+    if (!extraMinutes || extraMinutes < 1) { toast('Enter a valid number of minutes', 'error'); return; }
+    try {
+      await axios.post(API(`/tournaments/${t.id}/extend-time`), { extraMinutes });
+      toast(`Extended all games by ${extraMinutes} min`, 'success');
+    } catch (e: any) {
+      toast(e.response?.data?.error || 'Failed to extend time', 'error');
+    }
   };
 
   const downloadCSV = () => {
@@ -390,10 +425,90 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
             <Download size={15} /> CSV
           </button>
           {t.status === 'upcoming' && (
-            <button className="adm-btn adm-btn-success" onClick={startTournament} disabled={starting}>
-              {starting ? <RefreshCw size={15} className="spinning" /> : <Play size={15} />}
-              Start All Rooms
-            </button>
+            <>
+              <div className="adm-time-inline">
+                <input
+                  type="number" min="1" max="300"
+                  className="adm-input adm-input-sm"
+                  placeholder="Game limit (min)"
+                  value={timeLimitInput}
+                  onChange={e => setTimeLimitInput(e.target.value)}
+                  style={{ width: 130 }}
+                />
+              </div>
+              <div className="adm-time-inline">
+                <input
+                  type="number" min="30" max="3600"
+                  className="adm-input adm-input-sm"
+                  placeholder="Q. time (sec)"
+                  value={questionTimeLimitInput}
+                  onChange={e => setQuestionTimeLimitInput(e.target.value)}
+                  style={{ width: 120 }}
+                  title="Per-question time limit in seconds (leave blank for none)"
+                />
+              </div>
+              <button className="adm-btn adm-btn-success" onClick={startTournament} disabled={starting}>
+                {starting ? <RefreshCw size={15} className="spinning" /> : <Play size={15} />}
+                Start All Rooms
+              </button>
+            </>
+          )}
+          {t.status === 'live' && (
+            <div className="adm-time-controls">
+              <div className="adm-time-group">
+                <span className="adm-time-label">Set limit:</span>
+                <input
+                  type="number" min="1" max="300"
+                  className="adm-input adm-input-sm"
+                  placeholder="min"
+                  value={timeLimitInput}
+                  onChange={e => setTimeLimitInput(e.target.value)}
+                  style={{ width: 70 }}
+                />
+                <button className="adm-btn adm-btn-sm adm-btn-warning" onClick={setTimeLimit}>Set</button>
+              </div>
+              <div className="adm-time-group">
+                <span className="adm-time-label">Extend:</span>
+                <input
+                  type="number" min="1" max="60"
+                  className="adm-input adm-input-sm"
+                  placeholder="min"
+                  value={extendInput}
+                  onChange={e => setExtendInput(e.target.value)}
+                  style={{ width: 60 }}
+                />
+                <button className="adm-btn adm-btn-sm adm-btn-primary" onClick={extendTime}>+Add</button>
+              </div>
+              {t.timeLimitMinutes && (
+                <span className="adm-time-badge">⏱ {t.timeLimitMinutes} min limit</span>
+              )}
+              <div className="adm-time-group">
+                <span className="adm-time-label">Q.Timer:</span>
+                <input
+                  type="number" min="30" max="3600"
+                  className="adm-input adm-input-sm"
+                  placeholder="sec"
+                  value={questionTimeLimitInput}
+                  onChange={e => setQuestionTimeLimitInput(e.target.value)}
+                  style={{ width: 65 }}
+                  title="Per-question time limit in seconds"
+                />
+                <button
+                  className="adm-btn adm-btn-sm adm-btn-warning"
+                  onClick={async () => {
+                    const seconds = parseInt(questionTimeLimitInput, 10);
+                    if (!seconds || seconds < 10) { return; }
+                    try {
+                      await axios.post(API(`/tournaments/${t.id}/set-question-time-limit`), { seconds });
+                      setT(p => ({ ...p, questionTimeLimitSeconds: seconds }));
+                    } catch {}
+                  }}
+                >Set</button>
+              </div>
+              {t.questionTimeLimitSeconds && (
+                <span className="adm-time-badge">⏱ {t.questionTimeLimitSeconds}s/Q</span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -847,10 +962,16 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
 
   const getStatusBadge = (r: RoomResult) => {
     if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
-    if (r.winner === 'tie') return <span className="adm-badge badge-default">🤝 Draw</span>;
+    if (r.winner === 'tie') return <span className="adm-badge adm-badge-draw">🤝 Draw</span>;
     const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
-    return <span className="adm-badge badge-accepted">🏆 {winName}</span>;
+    return <span className="adm-badge adm-badge-winner">🏆 {winName}</span>;
   };
+
+  const summary = lb.reduce((acc, r) => {
+    if (r.phase === 'ended') acc.done++;
+    else acc.playing++;
+    return acc;
+  }, { done: 0, playing: 0 });
 
   return (
     <div className="adm-card adm-mt">
@@ -860,6 +981,10 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
           {!frozen && <span className="adm-live-dot" />}
         </h3>
         <div className="adm-action-row">
+          <span className="adm-muted" style={{ fontSize: '0.8rem' }}>
+            {summary.playing > 0 && <span className="adm-badge badge-live" style={{ marginRight: 6 }}>⚔️ {summary.playing} playing</span>}
+            {summary.done > 0 && <span className="adm-badge badge-ended" style={{ marginRight: 6 }}>✓ {summary.done} done</span>}
+          </span>
           <button className={`adm-btn adm-btn-ghost ${frozen ? 'adm-frozen-btn' : ''}`}
             onClick={() => { setFrozen(f => !f); toast(frozen ? 'Leaderboard live' : 'Leaderboard frozen', 'info'); }}>
             {frozen ? '▶ Unfreeze' : '⏸ Freeze'}
@@ -873,11 +998,15 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
         <table className="adm-table">
           <thead>
             <tr>
-              <th>#</th><th>Room</th><th>Team A</th><th>Cells</th><th>Team B</th><th>Cells</th><th>Result</th>
+              <th>#</th><th>Room</th>
+              <th>Team A</th><th>Solved</th><th>Cells</th>
+              <th style={{width:32}}></th>
+              <th>Team B</th><th>Solved</th><th>Cells</th>
+              <th>Result</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan={7}><Skeleton h={24} /></td></tr>) :
+            {loading ? Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan={10}><Skeleton h={24} /></td></tr>) :
               lb.map(r => (
                 <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' ? 'adm-top-row' : ''}>
                   <td>
@@ -887,13 +1016,18 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
                   </td>
                   <td><span className="adm-mono">{r.roomCode}</span></td>
                   <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                    {r.winner === 'A' && <span style={{ marginRight: 4 }}>👑</span>}
                     {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                   </td>
-                  <td><strong>{r.teamA.gridCells}</strong></td>
+                  <td><strong>{r.teamA.solved}</strong></td>
+                  <td>{r.teamA.gridCells}</td>
+                  <td className="adm-vs-cell">vs</td>
                   <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                    {r.winner === 'B' && <span style={{ marginRight: 4 }}>👑</span>}
                     {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
                   </td>
-                  <td><strong>{r.teamB.gridCells}</strong></td>
+                  <td><strong>{r.teamB.solved}</strong></td>
+                  <td>{r.teamB.gridCells}</td>
                   <td>{getStatusBadge(r)}</td>
                 </tr>
               ))
@@ -1504,9 +1638,9 @@ function LeaderboardPage() {
 
   const getStatusBadge = (r: RoomResult) => {
     if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
-    if (r.winner === 'tie') return <span className="adm-badge badge-default">🤝 Draw</span>;
+    if (r.winner === 'tie') return <span className="adm-badge adm-badge-draw">🤝 Draw</span>;
     const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
-    return <span className="adm-badge badge-accepted">🏆 {winName}</span>;
+    return <span className="adm-badge adm-badge-winner">🏆 {winName}</span>;
   };
 
   return (
@@ -1534,10 +1668,10 @@ function LeaderboardPage() {
         <div className="adm-table-wrap">
           <table className="adm-table">
             <thead>
-              <tr><th>#</th><th>Room</th><th>Team A</th><th>Cells</th><th>Team B</th><th>Cells</th><th>Result</th></tr>
+              <tr><th>#</th><th>Room</th><th>Team A</th><th>Solved</th><th>Cells</th><th style={{width:32}}></th><th>Team B</th><th>Solved</th><th>Cells</th><th>Result</th></tr>
             </thead>
             <tbody>
-              {loading ? Array(6).fill(0).map((_, i) => <tr key={i}><td colSpan={7}><Skeleton h={28} /></td></tr>) :
+              {loading ? Array(6).fill(0).map((_, i) => <tr key={i}><td colSpan={10}><Skeleton h={28} /></td></tr>) :
                 lb.map(r => (
                   <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' ? 'adm-top-row' : ''}>
                     <td>
@@ -1547,13 +1681,18 @@ function LeaderboardPage() {
                     </td>
                     <td><span className="adm-mono">{r.roomCode}</span></td>
                     <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                      {r.winner === 'A' && <span style={{ marginRight: 4 }}>👑</span>}
                       {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                     </td>
-                    <td><strong>{r.teamA.gridCells}</strong></td>
+                    <td><strong>{r.teamA.solved}</strong></td>
+                    <td>{r.teamA.gridCells}</td>
+                    <td className="adm-vs-cell">vs</td>
                     <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                      {r.winner === 'B' && <span style={{ marginRight: 4 }}>👑</span>}
                       {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
                     </td>
-                    <td><strong>{r.teamB.gridCells}</strong></td>
+                    <td><strong>{r.teamB.solved}</strong></td>
+                    <td>{r.teamB.gridCells}</td>
                     <td>{getStatusBadge(r)}</td>
                   </tr>
                 ))

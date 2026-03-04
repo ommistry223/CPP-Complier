@@ -1010,6 +1010,72 @@ label {
 
 .adm-frozen-btn { border-color: #f59e0b !important; color: #d97706 !important; }
 
+/* ── Time control UI ─────────────────────────────────── */
+.adm-time-inline { display: flex; align-items: center; }
+
+.adm-time-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.adm-time-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.adm-time-label {
+  font-size: 0.78rem;
+  color: var(--adm-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.adm-time-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.25);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.adm-btn-warning {
+  background: rgba(245,158,11,0.12);
+  color: #d97706;
+  border: 1px solid rgba(245,158,11,0.3);
+}
+.adm-btn-warning:hover { background: rgba(245,158,11,0.2); }
+
+/* ── New leaderboard badges ──────────────────────────── */
+.adm-badge-winner {
+  background: rgba(245,158,11,0.13);
+  color: #b45309;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+}
+.adm-badge-draw {
+  background: rgba(100,116,139,0.12);
+  color: #64748b;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+}
+.adm-vs-cell {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
 /* ── Skeleton ────────────────────────────────────────── */
 .adm-skeleton {
   background: linear-gradient(90deg,

@@ -19,12 +19,14 @@ services:
     image: redis:7-alpine
     ports:
       - "6380:6379"
+    volumes:
+      - redis_data:/data
     command: >
       redis-server
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
-      --save ""
-      --appendonly no
+      --appendonly yes
+      --appendfsync everysec
 
   api1:
     build:
@@ -184,3 +186,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  redis_data:

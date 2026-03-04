@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import {
     Play, Loader2, Code2, Swords, Trophy, Zap, Clock, ChevronLeft, Scissors,
-    Maximize2, Minimize2, UploadCloud, FileCode
+    Maximize2, Minimize2, UploadCloud, FileCode, Timer
 } from 'lucide-react';
 import { useGameSocket } from '../hooks/useGameSocket';
 import BattleIntro from '../components/BattleIntro';
@@ -25,6 +25,9 @@ interface Room {
     winner: null | string;
     lastSolvedBy: null | string; isBonusQuestion: boolean;
     questionStartedAt: number | null;
+    timeLimitMs: number | null;
+    endsAt: number | null;
+    questionTimeLimitMs: number | null;
 }
 
 const TEAM_COLORS = { A: '#3b82f6', B: '#8b5cf6' };
@@ -271,7 +274,9 @@ export default function Game() {
     const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
     const [execTime, setExecTime] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
-    const [elapsed, setElapsed] = useState(0);
+    const [countdown, setCountdown] = useState<number | null>(null);       // game time left (sec)
+    const [questionCountdown, setQuestionCountdown] = useState<number | null>(null); // per-Q time left (sec)
+    const countdownEndsAtRef = useRef<number | null>(null);
     const [problemOpen, setProblemOpen] = useState(true);
     const [knifeMode, setKnifeMode] = useState(false);
     const [editorFullscreen, setEditorFullscreen] = useState(false);
@@ -353,6 +358,39 @@ export default function Game() {
                 break;
 
             case 'grid_updated': setRoom(msg.room); break;
+
+            case 'question_expired':
+                setRoom(msg.room);
+                if (msg.data?.isLastQuestion) {
+                    showToast("⏱️ Time's up! Solve it before the game ends.", 'warning');
+                } else {
+                    showToast("⏱️ Time's up! Moving to the next question.", 'warning');
+                }
+                break;
+
+            case 'question_time_limit_set':
+                setRoom(prev => ({
+                    ...prev,
+                    questionTimeLimitMs: msg.questionTimeLimitMs ?? prev.questionTimeLimitMs,
+                }));
+                if (msg.room) setRoom(msg.room);
+                showToast(`Question timer: ${Math.round((msg.questionTimeLimitMs || 0) / 60000)} min/question`, 'info');
+                break;
+
+            case 'time_limit_set':
+            case 'time_extended': {
+                const newEndsAt: number = msg.endsAt;
+                const newTimeLimitMs: number | null = msg.timeLimitMs ?? null;
+                setRoom(prev => ({ ...prev, timeLimitMs: newTimeLimitMs ?? prev.timeLimitMs, endsAt: newEndsAt }));
+                countdownEndsAtRef.current = newEndsAt;
+                const mins = newTimeLimitMs ? Math.round(newTimeLimitMs / 60000) : null;
+                if (msg.type === 'time_limit_set') {
+                    showToast(mins ? `Game time limit: ${mins} min` : 'Time limit set', 'info');
+                } else {
+                    showToast('Time extended!', 'success');
+                }
+                break;
+            }
 
             case 'knife_used':
                 setRoom(msg.room);
@@ -456,25 +494,62 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [langChoice]);
 
-    // Timer Logic
+    // ── Timer 1: Per-question countdown (if questionTimeLimitMs is set) ──────
     useEffect(() => {
         if (timerRef.current) clearInterval(timerRef.current);
-        if (room.phase === 'playing' && room.questionStartedAt) {
-            timerRef.current = setInterval(() => {
-                setElapsed(Math.floor((Date.now() - (room.questionStartedAt || 0)) / 1000));
+        if (room.phase === 'playing' && room.questionStartedAt && room.questionTimeLimitMs && room.questionTimeLimitMs > 0) {
+            const getLeft = () => Math.max(0, Math.ceil(
+                (room.questionTimeLimitMs! - (Date.now() - room.questionStartedAt!)) / 1000
+            ));
+            setQuestionCountdown(getLeft());
+            timerRef.current = setInterval(() => setQuestionCountdown(getLeft()), 1000);
+        } else {
+            setQuestionCountdown(null);
+        }
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [room.phase, room.questionStartedAt, room.currentQuestionIdx, room.questionTimeLimitMs]);
+
+    // ── Timer 2: Game countdown (counts down to endsAt) ─────────────────────
+    const countdownRef = useRef<any>(null);
+    useEffect(() => {
+        countdownEndsAtRef.current = room.endsAt;
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        if (room.endsAt && room.phase !== 'ended') {
+            setCountdown(Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)));
+            countdownRef.current = setInterval(() => {
+                const ea = countdownEndsAtRef.current;
+                if (!ea) { setCountdown(null); return; }
+                const left = Math.max(0, Math.ceil((ea - Date.now()) / 1000));
+                setCountdown(left);
+                if (left === 0) { clearInterval(countdownRef.current); countdownRef.current = null; }
             }, 1000);
         } else {
-            setElapsed(0);
+            setCountdown(null);
         }
-        return () => timerRef.current && clearInterval(timerRef.current);
-    }, [room.phase, room.questionStartedAt, room.currentQuestionIdx]);
+        return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+    }, [room.endsAt, room.phase]);
 
-    const hh = Math.floor(elapsed / 3600).toString().padStart(2, '0');
-    const mm = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
-    const ss = (elapsed % 60).toString().padStart(2, '0');
-    const timerStr = `${hh}:${mm}:${ss}`;
-    const timerWarning = elapsed > 120;
-    const timerAlert = elapsed > 240;
+    // ── Display vars ─────────────────────────────────────────────────────────
+    // Game countdown
+    const cdSec = countdown ?? 0;
+    const cdStr = countdown !== null
+        ? `${Math.floor(cdSec / 60).toString().padStart(2, '0')}:${(cdSec % 60).toString().padStart(2, '0')}`
+        : null;
+    const cdDanger  = countdown !== null && countdown < 60;
+    const cdWarning = countdown !== null && countdown < 300;
+    const totalMinLabel = room.timeLimitMs ? `${Math.round(room.timeLimitMs / 60000)} min` : null;
+    // Per-question countdown
+    const qcSec = questionCountdown ?? 0;
+    const qcStr = questionCountdown !== null
+        ? `${Math.floor(qcSec / 60).toString().padStart(2, '0')}:${(qcSec % 60).toString().padStart(2, '0')}`
+        : null;
+    const qcDanger  = questionCountdown !== null && questionCountdown < 30;
+    const qcWarning = questionCountdown !== null && questionCountdown < 120;
+    const qcTotalLabel = room.questionTimeLimitMs
+        ? (room.questionTimeLimitMs >= 60000
+            ? `${Math.round(room.questionTimeLimitMs / 60000)} min`
+            : `${Math.round(room.questionTimeLimitMs / 1000)} s`)
+        : null;
 
     const currentQ = questions[room.currentQuestionIdx];
     const myTeamData = room.teams[myTeam];
@@ -624,10 +699,26 @@ export default function Game() {
                 </div>
 
                 <div className="nav-center">
-                    {room.phase === 'playing' && room.questionStartedAt && (
-                        <div className={`pro-timer-pill ${timerAlert ? 'alert' : timerWarning ? 'warn' : ''}`}>
+                    {/* Game countdown — shown when tournament has a time limit */}
+                    {cdStr && room.phase !== 'ended' && (
+                        <div className={`pro-timer-pill game-countdown-pill ${cdDanger ? 'alert' : cdWarning ? 'warn' : ''}`}
+                             title="Time remaining in this game">
+                            <Timer size={15} className="timer-icon" />
+                            <span className="timer-val">{cdStr}</span>
+                            {totalMinLabel && !cdDanger && !cdWarning && (
+                                <span className="timer-total">/ {totalMinLabel}</span>
+                            )}
+                        </div>
+                    )}
+                    {/* Per-question countdown — only shown when question time limit is configured */}
+                    {qcStr && room.phase === 'playing' && (
+                        <div className={`pro-timer-pill question-cd-pill ${qcDanger ? 'alert' : qcWarning ? 'warn' : ''}`}
+                             title="Time left on this question">
                             <Clock size={15} className="timer-icon" />
-                            <span className="timer-val">{timerStr}</span>
+                            <span className="timer-val">{qcStr}</span>
+                            {qcTotalLabel && !qcDanger && !qcWarning && (
+                                <span className="timer-total">/ {qcTotalLabel}</span>
+                            )}
                         </div>
                     )}
                     {room.phase === 'grid_pick' && room.lastSolvedBy === myTeam && (
@@ -685,6 +776,25 @@ export default function Game() {
                                         <span className="q-type">{room.currentQuestionIdx < 3 ? 'Knife Phase' : 'Battle Phase'}</span>
                                     </div>
                                 </div>
+                                {/* Per-question countdown bar — only shown when question time limit is set */}
+                                {qcStr && room.phase === 'playing' && room.questionTimeLimitMs && (
+                                    <div className={`q-timer-bar ${qcDanger ? 'danger' : qcWarning ? 'warn' : ''}`}>
+                                        <div className="q-timer-left">
+                                            <Clock size={16} className="q-timer-icon" />
+                                            <span className="q-timer-label">Question Time</span>
+                                        </div>
+                                        <div className="q-timer-countdown">{qcStr}</div>
+                                        <div
+                                            className="q-timer-progress-wrap"
+                                            title={`${qcStr} remaining`}
+                                        >
+                                            <div
+                                                className="q-timer-progress-fill"
+                                                style={{ width: `${Math.min(100, (qcSec / (room.questionTimeLimitMs / 1000)) * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="q-body" dangerouslySetInnerHTML={{ __html: currentQ.description?.replace(/\n/g, '<br/>') }} />
 
                                 <div className="q-section">

@@ -304,19 +304,78 @@ router.patch('/problems/:id/publish', async (req, res) => {
 });
 
 /* ──────────────────────────────────────────────────────────────
+   TOURNAMENT HELPERS — PostgreSQL ↔ in-memory object
+────────────────────────────────────────────────────────────── */
+function dbRowToTournament(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    questionCount: row.question_count,
+    status: row.status,
+    visibility: row.visibility,
+    maxTeams: row.max_teams,
+    enableLeaderboard: row.enable_leaderboard,
+    enableBonus: row.enable_bonus,
+    timeLimitMinutes: row.time_limit_minutes || null,
+    questionTimeLimitSeconds: row.question_time_limit_seconds || null,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    startedAt: row.started_at ? Number(row.started_at) : null,
+    rooms: row.rooms || [],
+    pairs: row.pairs || [],
+    questionIds: row.question_ids || [],
+    createdAt: Number(row.created_at),
+  };
+}
+
+async function saveTournamentToDB(t) {
+  await db.query(
+    `INSERT INTO tournaments
+       (id, name, description, question_count, status, visibility,
+        max_teams, enable_leaderboard, enable_bonus, time_limit_minutes,
+        start_date, end_date, started_at, rooms, pairs, question_ids, created_at,
+        question_time_limit_seconds)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+     ON CONFLICT (id) DO UPDATE SET
+       name=$2, description=$3, question_count=$4, status=$5, visibility=$6,
+       max_teams=$7, enable_leaderboard=$8, enable_bonus=$9, time_limit_minutes=$10,
+       start_date=$11, end_date=$12, started_at=$13, rooms=$14, pairs=$15, question_ids=$16,
+       question_time_limit_seconds=$18`,
+    [
+      t.id, t.name, t.description || '', t.questionCount || 17,
+      t.status || 'upcoming', t.visibility || 'private',
+      t.maxTeams || 0, t.enableLeaderboard !== false, t.enableBonus !== false,
+      t.timeLimitMinutes || null,
+      t.startDate || null, t.endDate || null, t.startedAt || null,
+      JSON.stringify(t.rooms || []), JSON.stringify(t.pairs || []),
+      JSON.stringify(t.questionIds || []), t.createdAt || Date.now(),
+      t.questionTimeLimitSeconds || null,
+    ]
+  );
+}
+
+/** Get tournament from Redis; if missing, reload from PostgreSQL and re-cache */
+async function getTournament(id) {
+  const raw = await redisClient.get(`tournament:${id}`);
+  if (raw) return JSON.parse(raw);
+
+  const { rows } = await db.query('SELECT * FROM tournaments WHERE id=$1', [id]);
+  if (!rows.length) return null;
+  const t = dbRowToTournament(rows[0]);
+  // Re-populate Redis cache (7-day TTL)
+  await redisClient.set(`tournament:${id}`, JSON.stringify(t), 'EX', 7 * 86400);
+  return t;
+}
+
+/* ──────────────────────────────────────────────────────────────
    TOURNAMENTS  GET /api/admin/tournaments
-   Reads all tournaments from Redis (pattern scan)
+   Reads from PostgreSQL (permanent) — no more Redis-only loss
 ────────────────────────────────────────────────────────────── */
 router.get('/tournaments', async (req, res) => {
   try {
-    const keys = await redisClient.keys('tournament:T-*');
-    if (!keys.length) return res.json({ tournaments: [] });
-    const raw = await redisClient.mget(...keys);
-    const tournaments = raw
-      .filter(Boolean)
-      .map(s => JSON.parse(s))
-      .sort((a, b) => b.createdAt - a.createdAt);
-    res.json({ tournaments });
+    const { rows } = await db.query('SELECT * FROM tournaments ORDER BY created_at DESC');
+    res.json({ tournaments: rows.map(dbRowToTournament) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -324,6 +383,7 @@ router.get('/tournaments', async (req, res) => {
 
 /* ──────────────────────────────────────────────────────────────
    CREATE TOURNAMENT  POST /api/admin/tournaments
+   Saves to BOTH PostgreSQL (permanent) and Redis (fast cache)
 ────────────────────────────────────────────────────────────── */
 router.post('/tournaments', async (req, res) => {
   const {
@@ -363,11 +423,11 @@ router.post('/tournaments', async (req, res) => {
       questionIds: [],
     };
 
-    await redisClient.set(
-      `tournament:${tournamentId}`,
-      JSON.stringify(tournamentData),
-      'EX', 7 * 86400  // 7 days TTL
-    );
+    // Save to PostgreSQL (permanent) and Redis (fast cache)
+    await Promise.all([
+      saveTournamentToDB(tournamentData),
+      redisClient.set(`tournament:${tournamentId}`, JSON.stringify(tournamentData), 'EX', 7 * 86400),
+    ]);
 
     logger.info(`Admin tournament created: ${tournamentId} (${pairs} rooms)`);
     res.status(201).json({ tournament: tournamentData });
@@ -382,9 +442,8 @@ router.post('/tournaments', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.get('/tournaments/:id/questions', async (req, res) => {
   try {
-    const raw = await redisClient.get(`tournament:${req.params.id}`);
-    if (!raw) return res.status(404).json({ error: 'Tournament not found' });
-    const tournament = JSON.parse(raw);
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
     const ids = tournament.questionIds || [];
     if (!ids.length) return res.json({ questions: [] });
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
@@ -410,11 +469,13 @@ router.get('/tournaments/:id/questions', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.put('/tournaments/:id/questions', async (req, res) => {
   try {
-    const raw = await redisClient.get(`tournament:${req.params.id}`);
-    if (!raw) return res.status(404).json({ error: 'Tournament not found' });
-    const tournament = JSON.parse(raw);
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
     tournament.questionIds = Array.isArray(req.body.questionIds) ? req.body.questionIds : [];
-    await redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400);
+    await Promise.all([
+      saveTournamentToDB(tournament),
+      redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
+    ]);
     res.json({ ok: true, questionIds: tournament.questionIds });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -426,9 +487,9 @@ router.put('/tournaments/:id/questions', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.get('/tournaments/:id', async (req, res) => {
   try {
-    const data = await redisClient.get(`tournament:${req.params.id}`);
-    if (!data) return res.status(404).json({ error: 'Tournament not found' });
-    res.json({ tournament: JSON.parse(data) });
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+    res.json({ tournament });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -439,10 +500,13 @@ router.get('/tournaments/:id', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.patch('/tournaments/:id', async (req, res) => {
   try {
-    const raw = await redisClient.get(`tournament:${req.params.id}`);
-    if (!raw) return res.status(404).json({ error: 'Tournament not found' });
-    const tournament = { ...JSON.parse(raw), ...req.body, id: req.params.id };
-    await redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400);
+    const existing = await getTournament(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Tournament not found' });
+    const tournament = { ...existing, ...req.body, id: req.params.id };
+    await Promise.all([
+      saveTournamentToDB(tournament),
+      redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
+    ]);
     res.json({ tournament });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -454,18 +518,26 @@ router.patch('/tournaments/:id', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.post('/tournaments/:id/start', async (req, res) => {
   try {
-    const raw = await redisClient.get(`tournament:${req.params.id}`);
-    if (!raw) return res.status(404).json({ error: 'Tournament not found' });
-    const tournament = JSON.parse(raw);
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
-    // Use tournament's assigned questionIds if available
     const tournamentQuestionIds = Array.isArray(tournament.questionIds) && tournament.questionIds.length > 0
       ? tournament.questionIds
       : null;
 
+    // timeLimitMinutes: optional per-room total time limit
+    const timeLimitMs = req.body.timeLimitMinutes
+      ? Math.max(1, parseInt(req.body.timeLimitMinutes)) * 60 * 1000
+      : (tournament.timeLimitMinutes ? tournament.timeLimitMinutes * 60 * 1000 : null);
+
+    // questionTimeLimitSeconds: optional per-question timer
+    const questionTimeLimitMs = req.body.questionTimeLimitSeconds
+      ? Math.max(10, parseInt(req.body.questionTimeLimitSeconds)) * 1000
+      : (tournament.questionTimeLimitSeconds ? tournament.questionTimeLimitSeconds * 1000 : null);
+
     let started = 0, skipped = 0;
     for (const roomCode of tournament.rooms) {
-      const result = await GameManager.forceStartRoom(roomCode, tournamentQuestionIds);
+      const result = await GameManager.forceStartRoom(roomCode, tournamentQuestionIds, timeLimitMs, questionTimeLimitMs);
       if (result.room) {
         started++;
         broadcastToRoom(roomCode, { type: 'game_started', room: result.room });
@@ -474,9 +546,111 @@ router.post('/tournaments/:id/start', async (req, res) => {
 
     tournament.status = 'live';
     tournament.startedAt = Date.now();
-    await redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400);
+    if (timeLimitMs) tournament.timeLimitMinutes = timeLimitMs / 60000;
+    if (questionTimeLimitMs) tournament.questionTimeLimitSeconds = questionTimeLimitMs / 1000;
+    await Promise.all([
+      saveTournamentToDB(tournament),
+      redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
+    ]);
 
     res.json({ ok: true, started, skipped, status: 'live' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────
+   SET QUESTION TIME LIMIT  POST /api/admin/tournaments/:id/set-question-time-limit
+   Body: { seconds: number }  — sets per-question timer on ALL live rooms
+────────────────────────────────────────────────────────────── */
+router.post('/tournaments/:id/set-question-time-limit', async (req, res) => {
+  try {
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+    const seconds = Math.max(10, parseInt(req.body.seconds) || 300);
+    const questionTimeLimitMs = seconds * 1000;
+    const results = [];
+    for (const roomCode of tournament.rooms) {
+      const r = await GameManager.setQuestionTimeLimit(roomCode, questionTimeLimitMs);
+      results.push({ roomCode, ...r });
+      if (r.ok) {
+        const room = await GameManager.getRoom(roomCode);
+        broadcastToRoom(roomCode, {
+          type: 'question_time_limit_set',
+          questionTimeLimitMs,
+          room: room ? GameManager.sanitizeRoom(room) : undefined,
+        });
+      }
+    }
+    tournament.questionTimeLimitSeconds = seconds;
+    await Promise.all([
+      saveTournamentToDB(tournament),
+      redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
+    ]);
+    res.json({ ok: true, seconds, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────
+   EXTEND TIME  POST /api/admin/tournaments/:id/extend-time
+   Body: { extraMinutes: number }  — adds time to ALL live rooms
+────────────────────────────────────────────────────────────── */
+router.post('/tournaments/:id/extend-time', async (req, res) => {
+  try {
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+    const extraMs = Math.max(1, parseInt(req.body.extraMinutes) || 5) * 60 * 1000;
+    const results = [];
+    for (const roomCode of tournament.rooms) {
+      const r = await GameManager.extendTime(roomCode, extraMs);
+      results.push({ roomCode, ...r });
+      if (r.ok) {
+        broadcastToRoom(roomCode, {
+          type: 'time_extended',
+          endsAt: r.endsAt,
+          extendedBy: extraMs / 60000,
+        });
+      }
+    }
+    res.json({ ok: true, extraMinutes: extraMs / 60000, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────
+   SET TIME LIMIT  POST /api/admin/tournaments/:id/set-time-limit
+   Body: { minutes: number }  — sets time limit on ALL live rooms
+────────────────────────────────────────────────────────────── */
+router.post('/tournaments/:id/set-time-limit', async (req, res) => {
+  try {
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+    const minutes = Math.max(1, parseInt(req.body.minutes) || 60);
+    const timeLimitMs = minutes * 60 * 1000;
+    const results = [];
+    for (const roomCode of tournament.rooms) {
+      const r = await GameManager.setTimeLimit(roomCode, timeLimitMs);
+      results.push({ roomCode, ...r });
+      if (r.ok) {
+        const room = await GameManager.getRoom(roomCode);
+        broadcastToRoom(roomCode, {
+          type: 'time_limit_set',
+          endsAt: r.endsAt,
+          timeLimitMs,
+          room: room ? GameManager.sanitizeRoom(room) : undefined,
+        });
+      }
+    }
+    // Save time limit to tournament record
+    tournament.timeLimitMinutes = minutes;
+    await Promise.all([
+      saveTournamentToDB(tournament),
+      redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
+    ]);
+    res.json({ ok: true, minutes, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -487,7 +661,10 @@ router.post('/tournaments/:id/start', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.delete('/tournaments/:id', async (req, res) => {
   try {
-    await redisClient.del(`tournament:${req.params.id}`);
+    await Promise.all([
+      db.query('DELETE FROM tournaments WHERE id=$1', [req.params.id]),
+      redisClient.del(`tournament:${req.params.id}`),
+    ]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -543,9 +720,8 @@ router.get('/analytics', async (req, res) => {
 ────────────────────────────────────────────────────────────── */
 router.get('/tournaments/:id/leaderboard', async (req, res) => {
   try {
-    const raw = await redisClient.get(`tournament:${req.params.id}`);
-    if (!raw) return res.status(404).json({ error: 'Tournament not found' });
-    const tournament = JSON.parse(raw);
+    const tournament = await getTournament(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     const leaderboard = [];
     for (const roomCode of tournament.rooms) {

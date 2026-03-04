@@ -86,6 +86,21 @@ const adminWatchers = new Map();  // roomCode → Set<clientId>
 require('./utils/broadcaster').init(clients); // allow HTTP routes to broadcast
 let clientIdCounter = 0;
 
+// Give GameManager a way to broadcast game_over when the timer fires
+GameManager.setBroadcastFn(async (roomCode, data) => {
+    const room = await GameManager.getRoom(roomCode);
+    if (!room) return;
+    const allSockets = [
+        ...room.teams.A.socketIds,
+        ...room.teams.B.socketIds,
+        ...(adminWatchers.get(roomCode) || new Set()),
+    ];
+    for (const sid of allSockets) {
+        const c = clients.get(sid);
+        if (c && c.readyState === c.OPEN) c.send(JSON.stringify(data));
+    }
+});
+
 wss.on('connection', (ws) => {
     const clientId = `c${++clientIdCounter}`;
     clients.set(clientId, ws);
@@ -199,6 +214,36 @@ wss.on('connection', (ws) => {
                 const result = await GameManager.useKnife(ws._roomCode, ws._teamId, payload.targetCellIdx);
                 if (!result.ok) { send({ type: 'error', message: result.error }); break; }
                 await broadcastAll(ws._roomCode, { type: result.event, room: GameManager.sanitizeRoom(result.room), data: result.data });
+                break;
+            }
+
+            case 'admin_set_time_limit': {
+                // Admin sets a time limit on a room (in seconds)
+                if (ws._teamId !== 'admin') { send({ type: 'error', message: 'Admin only' }); break; }
+                const seconds = Math.max(10, Math.min(7200, parseInt(payload.seconds) || 3600));
+                const result = await GameManager.setTimeLimit(ws._roomCode, seconds * 1000);
+                if (result.error) { send({ type: 'error', message: result.error }); break; }
+                await broadcastAll(ws._roomCode, {
+                    type: 'time_limit_set',
+                    endsAt: result.endsAt,
+                    timeLimitMs: seconds * 1000,
+                    room: GameManager.sanitizeRoom(await GameManager.getRoom(ws._roomCode)),
+                });
+                break;
+            }
+
+            case 'admin_extend_time': {
+                // Admin extends time on a room (in seconds)
+                if (ws._teamId !== 'admin') { send({ type: 'error', message: 'Admin only' }); break; }
+                const extraSec = Math.max(10, Math.min(3600, parseInt(payload.seconds) || 300));
+                const result = await GameManager.extendTime(ws._roomCode, extraSec * 1000);
+                if (result.error) { send({ type: 'error', message: result.error }); break; }
+                await broadcastAll(ws._roomCode, {
+                    type: 'time_extended',
+                    endsAt: result.endsAt,
+                    extendedBy: extraSec,
+                    room: GameManager.sanitizeRoom(await GameManager.getRoom(ws._roomCode)),
+                });
                 break;
             }
 

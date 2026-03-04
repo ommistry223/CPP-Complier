@@ -297,6 +297,31 @@ const migrations = [
     // Migration 15: Add bonus points column to problems
     `
   ALTER TABLE problems ADD COLUMN IF NOT EXISTS bonus INTEGER DEFAULT 0;
+  `,
+
+    // Migration 16: Tournaments persistent storage
+    `
+  CREATE TABLE IF NOT EXISTS tournaments (
+    id           VARCHAR(20) PRIMARY KEY,
+    name         VARCHAR(255) NOT NULL,
+    description  TEXT         DEFAULT '',
+    question_count INTEGER    DEFAULT 17,
+    status       VARCHAR(20)  DEFAULT 'upcoming',
+    visibility   VARCHAR(20)  DEFAULT 'private',
+    max_teams    INTEGER      DEFAULT 0,
+    enable_leaderboard BOOLEAN DEFAULT true,
+    enable_bonus       BOOLEAN DEFAULT true,
+    time_limit_minutes INTEGER DEFAULT NULL,
+    start_date   TEXT,
+    end_date     TEXT,
+    started_at   BIGINT,
+    rooms        JSONB        NOT NULL DEFAULT '[]',
+    pairs        JSONB        NOT NULL DEFAULT '[]',
+    question_ids JSONB        NOT NULL DEFAULT '[]',
+    created_at   BIGINT       NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_tournaments_created ON tournaments(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_tournaments_status  ON tournaments(status);
   `
 ];
 
