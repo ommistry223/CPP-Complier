@@ -13,6 +13,8 @@ const rooms = new Map();
 const roomTimers = new Map();
 // Per-question timers: roomCode → timeout handle
 const questionTimers = new Map();
+// Overtime timers: roomCode → timeout handle
+const overtimeTimers = new Map();
 
 /** Helper: Write cache to disk as fallback (Async) */
 async function syncToDisk() {
@@ -103,6 +105,14 @@ function scheduleRoomTimer(roomCode, endsAt) {
         const room = await loadRoom(roomCode);
         if (!room || room.phase === 'ended') return;
 
+        // If it's a draw AND a bonus question is configured → start overtime instead
+        const aGrid = room.grid.filter(c => c === 'A').length;
+        const bGrid = room.grid.filter(c => c === 'B').length;
+        if (aGrid === bGrid && room.bonusQuestionId && !room.overtimePhase) {
+            await _startOvertime(roomCode, room);
+            return;
+        }
+
         // Force end: determine winner by grid cells
         const endResult = _endGame(room);
         await saveRoom(room);
@@ -167,6 +177,55 @@ function scheduleQuestionTimer(roomCode, questionIdx, questionTimeLimitMs) {
     questionTimers.set(roomCode, handle);
 }
 
+/**
+ * Start overtime after a draw with a bonus question configured.
+ * Sends `overtime_started` to all clients and starts the overtime countdown.
+ */
+async function _startOvertime(roomCode, room) {
+    const timeLimitMs = room.overtimeTimeLimitMs || 30 * 60 * 1000;
+    room.overtimePhase = true;
+    room.overtimeEndsAt = Date.now() + timeLimitMs;
+    await saveRoom(room);
+    scheduleOvertimeTimer(roomCode, room.overtimeEndsAt);
+    logger.info(`Room ${roomCode}: draw → overtime (${timeLimitMs / 60000} min, bonus=${room.bonusQuestionId})`);
+    if (_broadcastFn) {
+        _broadcastFn(roomCode, {
+            type: 'overtime_started',
+            room: sanitizeRoom(room),
+            data: { bonusQuestionId: room.bonusQuestionId, overtimeEndsAt: room.overtimeEndsAt },
+        });
+    }
+}
+
+/**
+ * Schedule the overtime timer. When it fires, both teams are defeated.
+ */
+function scheduleOvertimeTimer(roomCode, endsAt) {
+    if (overtimeTimers.has(roomCode)) clearTimeout(overtimeTimers.get(roomCode));
+    const msLeft = endsAt - Date.now();
+    if (msLeft <= 0) return;
+    const handle = setTimeout(async () => {
+        overtimeTimers.delete(roomCode);
+        const room = await loadRoom(roomCode);
+        if (!room || room.phase === 'ended') return;
+        if (!room.overtimePhase) return;
+        room.winner = 'defeat';
+        room.phase = 'ended';
+        room.overtimePhase = false;
+        await saveRoom(room);
+        logger.info(`Room ${roomCode}: overtime expired → defeat`);
+        if (_broadcastFn) {
+            _broadcastFn(roomCode, {
+                type: 'game_over',
+                room: sanitizeRoom(room),
+                data: { winner: 'defeat', reason: 'overtime_expired' },
+            });
+        }
+    }, msLeft);
+    if (handle.unref) handle.unref();
+    overtimeTimers.set(roomCode, handle);
+}
+
 async function createRoom(questionCount = 17) {
     const roomCode = rand(3);
     const room = {
@@ -179,6 +238,10 @@ async function createRoom(questionCount = 17) {
         timeLimitMs: null,          // null = no game time limit
         endsAt: null,                // timestamp when game auto-ends
         questionTimeLimitMs: null,   // null = no per-question time limit
+        bonusQuestionId: null,       // ID of bonus question for overtime draw tiebreak
+        overtimePhase: false,        // true while game is in overtime
+        overtimeEndsAt: null,        // timestamp when overtime ends
+        overtimeTimeLimitMs: null,   // overtime duration in ms (default 30 min)
     };
     await saveRoom(room);
     logger.info(`ROOM CREATED: ${room.code} (Admin: ${room.adminCode})`);
@@ -240,7 +303,7 @@ async function adminStartGame(adminCode) {
  * @param {number}  [timeLimitMs]          - optional total game time limit in ms
  * @param {number}  [questionTimeLimitMs]  - optional per-question time limit in ms
  */
-async function forceStartRoom(roomCode, questionIds, timeLimitMs, questionTimeLimitMs) {
+async function forceStartRoom(roomCode, questionIds, timeLimitMs, questionTimeLimitMs, bonusQuestionId, overtimeTimeLimitMs) {
     const room = await loadRoom(roomCode);
     if (!room) return { error: 'Room not found' };
     if (room.phase !== 'waiting') return { skipped: true, reason: room.phase };
@@ -259,6 +322,8 @@ async function forceStartRoom(roomCode, questionIds, timeLimitMs, questionTimeLi
         room.questionTimeLimitMs = questionTimeLimitMs;
         scheduleQuestionTimer(roomCode, 0, questionTimeLimitMs);
     }
+    if (bonusQuestionId) room.bonusQuestionId = bonusQuestionId;
+    if (overtimeTimeLimitMs && overtimeTimeLimitMs > 0) room.overtimeTimeLimitMs = overtimeTimeLimitMs;
     await saveRoom(room);
     return { room };
 }
@@ -354,6 +419,16 @@ function calcScore() { return null; } // stub — scoring removed
 async function questionSolved(roomCode, teamId, questionIdx) {
     const room = await loadRoom(roomCode);
     if (!room || room.phase === 'ended') return { ok: false, error: 'Room not found or game over' };
+    // Overtime: first to solve the bonus question wins immediately — no grid pick
+    if (room.overtimePhase) {
+        if (overtimeTimers.has(roomCode)) { clearTimeout(overtimeTimers.get(roomCode)); overtimeTimers.delete(roomCode); }
+        room.winner = teamId;
+        room.phase = 'ended';
+        room.overtimePhase = false;
+        await saveRoom(room);
+        return { ok: true, event: 'game_over', room, data: { winner: teamId, reason: 'overtime_solved' } };
+    }
+
     if (questionIdx !== room.currentQuestionIdx) return { ok: false, error: 'Wrong question index' };
     if (room.teams[teamId].solved.includes(questionIdx)) return { ok: false, error: 'Already solved' };
 
@@ -466,6 +541,10 @@ function sanitizeRoom(room) {
         timeLimitMs: room.timeLimitMs || null,
         endsAt: room.endsAt || null,
         questionTimeLimitMs: room.questionTimeLimitMs || null,
+        overtimePhase: room.overtimePhase || false,
+        overtimeEndsAt: room.overtimeEndsAt || null,
+        overtimeTimeLimitMs: room.overtimeTimeLimitMs || null,
+        bonusQuestionId: room.bonusQuestionId || null,
         teams: { A: pick(room.teams.A), B: pick(room.teams.B) },
     };
 }

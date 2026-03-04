@@ -319,6 +319,7 @@ function dbRowToTournament(row) {
     enableBonus: row.enable_bonus,
     timeLimitMinutes: row.time_limit_minutes || null,
     questionTimeLimitSeconds: row.question_time_limit_seconds || null,
+    overtimeTimeLimitMinutes: row.overtime_time_limit_minutes || 30,
     startDate: row.start_date,
     endDate: row.end_date,
     startedAt: row.started_at ? Number(row.started_at) : null,
@@ -335,13 +336,13 @@ async function saveTournamentToDB(t) {
        (id, name, description, question_count, status, visibility,
         max_teams, enable_leaderboard, enable_bonus, time_limit_minutes,
         start_date, end_date, started_at, rooms, pairs, question_ids, created_at,
-        question_time_limit_seconds)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        question_time_limit_seconds, overtime_time_limit_minutes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      ON CONFLICT (id) DO UPDATE SET
        name=$2, description=$3, question_count=$4, status=$5, visibility=$6,
        max_teams=$7, enable_leaderboard=$8, enable_bonus=$9, time_limit_minutes=$10,
        start_date=$11, end_date=$12, started_at=$13, rooms=$14, pairs=$15, question_ids=$16,
-       question_time_limit_seconds=$18`,
+       question_time_limit_seconds=$18, overtime_time_limit_minutes=$19`,
     [
       t.id, t.name, t.description || '', t.questionCount || 17,
       t.status || 'upcoming', t.visibility || 'private',
@@ -351,6 +352,7 @@ async function saveTournamentToDB(t) {
       JSON.stringify(t.rooms || []), JSON.stringify(t.pairs || []),
       JSON.stringify(t.questionIds || []), t.createdAt || Date.now(),
       t.questionTimeLimitSeconds || null,
+      t.overtimeTimeLimitMinutes || 30,
     ]
   );
 }
@@ -535,9 +537,26 @@ router.post('/tournaments/:id/start', async (req, res) => {
       ? Math.max(10, parseInt(req.body.questionTimeLimitSeconds)) * 1000
       : (tournament.questionTimeLimitSeconds ? tournament.questionTimeLimitSeconds * 1000 : null);
 
+    // Overtime: determine configured duration
+    const overtimeTimeLimitMs = req.body.overtimeTimeLimitMinutes
+      ? Math.max(5, parseInt(req.body.overtimeTimeLimitMinutes)) * 60 * 1000
+      : (tournament.overtimeTimeLimitMinutes || 30) * 60 * 1000;
+
+    // Find the bonus question (problem_set = 'Bonus') for overtime draw tiebreak
+    let bonusQuestionId = null;
+    if (tournamentQuestionIds && tournamentQuestionIds.length > 0) {
+      const placeholders = tournamentQuestionIds.map((_, i) => `$${i + 1}`).join(',');
+      const bonusRes = await db.query(
+        `SELECT id FROM problems WHERE id IN (${placeholders}) AND problem_set = 'Bonus' LIMIT 1`,
+        tournamentQuestionIds
+      );
+      bonusQuestionId = bonusRes.rows[0]?.id || null;
+      if (bonusQuestionId) logger.info(`Tournament ${req.params.id}: bonus question for overtime = ${bonusQuestionId}`);
+    }
+
     let started = 0, skipped = 0;
     for (const roomCode of tournament.rooms) {
-      const result = await GameManager.forceStartRoom(roomCode, tournamentQuestionIds, timeLimitMs, questionTimeLimitMs);
+      const result = await GameManager.forceStartRoom(roomCode, tournamentQuestionIds, timeLimitMs, questionTimeLimitMs, bonusQuestionId, overtimeTimeLimitMs);
       if (result.room) {
         started++;
         broadcastToRoom(roomCode, { type: 'game_started', room: result.room });
@@ -548,12 +567,13 @@ router.post('/tournaments/:id/start', async (req, res) => {
     tournament.startedAt = Date.now();
     if (timeLimitMs) tournament.timeLimitMinutes = timeLimitMs / 60000;
     if (questionTimeLimitMs) tournament.questionTimeLimitSeconds = questionTimeLimitMs / 1000;
+    tournament.overtimeTimeLimitMinutes = overtimeTimeLimitMs / 60000;
     await Promise.all([
       saveTournamentToDB(tournament),
       redisClient.set(`tournament:${req.params.id}`, JSON.stringify(tournament), 'EX', 7 * 86400),
     ]);
 
-    res.json({ ok: true, started, skipped, status: 'live' });
+    res.json({ ok: true, started, skipped, status: 'live', bonusQuestionId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -736,7 +756,8 @@ router.get('/tournaments/:id/leaderboard', async (req, res) => {
         teamA: { name: teamA?.name || null, gridCells: aGrid, solved: teamA?.solved?.length || 0 },
         teamB: { name: teamB?.name || null, gridCells: bGrid, solved: teamB?.solved?.length || 0 },
         phase: room.phase,
-        winner: room.winner || null, // 'A', 'B', 'tie', or null
+        winner: room.winner || null, // 'A', 'B', 'tie', 'defeat', or null
+        overtime: !!room.overtimePhase,
       });
     }
 

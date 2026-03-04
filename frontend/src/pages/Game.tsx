@@ -28,6 +28,10 @@ interface Room {
     timeLimitMs: number | null;
     endsAt: number | null;
     questionTimeLimitMs: number | null;
+    overtimePhase: boolean;
+    overtimeEndsAt: number | null;
+    overtimeTimeLimitMs: number | null;
+    bonusQuestionId: string | null;
 }
 
 const TEAM_COLORS = { A: '#3b82f6', B: '#8b5cf6' };
@@ -277,6 +281,10 @@ export default function Game() {
     const [countdown, setCountdown] = useState<number | null>(null);       // game time left (sec)
     const [questionCountdown, setQuestionCountdown] = useState<number | null>(null); // per-Q time left (sec)
     const countdownEndsAtRef = useRef<number | null>(null);
+    const [overtimeQuestion, setOvertimeQuestion] = useState<any | null>(null);
+    const [showOvertimeBanner, setShowOvertimeBanner] = useState(false);
+    const [overtimeCountdown, setOvertimeCountdown] = useState<number | null>(null);
+    const overtimeCountdownRef = useRef<any>(null);
     const [problemOpen, setProblemOpen] = useState(true);
     const [knifeMode, setKnifeMode] = useState(false);
     const [editorFullscreen, setEditorFullscreen] = useState(false);
@@ -411,6 +419,22 @@ export default function Game() {
                 setRoom(msg.room);
                 break;
 
+            case 'overtime_started':
+                setRoom(msg.room);
+                setShowOvertimeBanner(true);
+                setTimeout(() => setShowOvertimeBanner(false), 4500);
+                showToast('⚡ OVERTIME! Bonus question — first to solve WINS!', 'warning');
+                if (msg.room?.bonusQuestionId) {
+                    axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems/${msg.room.bonusQuestionId}`)
+                        .then(res => {
+                            setOvertimeQuestion(res.data.problem || null);
+                            return axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems/${msg.room.bonusQuestionId}/testcases`);
+                        })
+                        .then(res => setSampleTcs(res.data.samples || []))
+                        .catch(() => {});
+                }
+                break;
+
             case 'error': showToast(msg.message, 'error'); break;
         }
     }, [myTeam]));
@@ -425,6 +449,21 @@ export default function Game() {
             return () => clearInterval(ping);
         }
     }, [connected, send, state.teamCode, state.teamName]);
+
+    // Auto-load overtime bonus question on reconnect (room already in overtime state)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (room.overtimePhase && room.bonusQuestionId) {
+            axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems/${room.bonusQuestionId}`)
+                .then(res => {
+                    setOvertimeQuestion(res.data.problem || null);
+                    return axios.get(`${import.meta.env.VITE_API_URL || ''}/api/problems/${room.bonusQuestionId}/testcases`);
+                })
+                .then(res => setSampleTcs(res.data.samples || []))
+                .catch(() => {});
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.overtimePhase, room.bonusQuestionId]);
 
     const [questionsError, setQuestionsError] = useState(false);
 
@@ -529,6 +568,19 @@ export default function Game() {
         return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
     }, [room.endsAt, room.phase]);
 
+    // ── Timer 3: Overtime countdown (counts down to overtimeEndsAt) ───────────
+    useEffect(() => {
+        if (overtimeCountdownRef.current) clearInterval(overtimeCountdownRef.current);
+        if (room.overtimePhase && room.overtimeEndsAt) {
+            const getLeft = () => Math.max(0, Math.ceil((room.overtimeEndsAt! - Date.now()) / 1000));
+            setOvertimeCountdown(getLeft());
+            overtimeCountdownRef.current = setInterval(() => setOvertimeCountdown(getLeft()), 1000);
+        } else {
+            setOvertimeCountdown(null);
+        }
+        return () => { if (overtimeCountdownRef.current) clearInterval(overtimeCountdownRef.current); };
+    }, [room.overtimePhase, room.overtimeEndsAt]);
+
     // ── Display vars ─────────────────────────────────────────────────────────
     // Game countdown
     const cdSec = countdown ?? 0;
@@ -550,8 +602,14 @@ export default function Game() {
             ? `${Math.round(room.questionTimeLimitMs / 60000)} min`
             : `${Math.round(room.questionTimeLimitMs / 1000)} s`)
         : null;
+    // Overtime countdown display vars
+    const otSec = overtimeCountdown ?? 0;
+    const otStr = overtimeCountdown !== null
+        ? `${Math.floor(otSec / 60).toString().padStart(2, '0')}:${(otSec % 60).toString().padStart(2, '0')}`
+        : null;
+    const otDanger = overtimeCountdown !== null && overtimeCountdown < 60;
 
-    const currentQ = questions[room.currentQuestionIdx];
+    const currentQ = room.overtimePhase ? overtimeQuestion : questions[room.currentQuestionIdx];
     const myTeamData = room.teams[myTeam];
     const code = editorCode;
     const knivesAvail = myTeamData.knivesUnlocked - myTeamData.knivesUsed;
@@ -677,7 +735,19 @@ export default function Game() {
     };
 
     return (
-        <div className="game-pro-root">
+        <div className={`game-pro-root ${room.overtimePhase ? 'overtime-mode' : ''}`}>
+            {/* Overtime dramatic entrance overlay */}
+            {showOvertimeBanner && (
+                <div className="overtime-entrance-overlay" onClick={() => setShowOvertimeBanner(false)}>
+                    <div className="overtime-entrance-content">
+                        <div className="ot-emoji">⚡</div>
+                        <div className="ot-title">OVERTIME</div>
+                        <div className="ot-sub">SUDDEN DEATH</div>
+                        <div className="ot-desc">First team to solve the bonus question WINS!</div>
+                        <div className="ot-tap">Tap anywhere to dismiss</div>
+                    </div>
+                </div>
+            )}
             {showBattleIntro && (
                 <BattleIntro
                     teamA={room.teams.A.name || 'Team A'}
@@ -719,6 +789,15 @@ export default function Game() {
                             {qcTotalLabel && !qcDanger && !qcWarning && (
                                 <span className="timer-total">/ {qcTotalLabel}</span>
                             )}
+                        </div>
+                    )}
+                    {/* Overtime countdown pill — shown during overtime, replaces game timer */}
+                    {room.overtimePhase && otStr && (
+                        <div className={`pro-timer-pill overtime-pill ${otDanger ? 'alert' : ''}`}
+                             title="Overtime remaining — solve the bonus question first!">
+                            <Zap size={15} className="timer-icon" />
+                            <span className="timer-val">{otStr}</span>
+                            <span className="timer-total">OVERTIME</span>
                         </div>
                     )}
                     {room.phase === 'grid_pick' && room.lastSolvedBy === myTeam && (
@@ -773,7 +852,9 @@ export default function Game() {
                                     <h1 className="q-title">{currentQ.title}</h1>
                                     <div className="q-meta">
                                         <span className={`q-diff ${currentQ.difficulty?.toLowerCase()}`}>{currentQ.difficulty}</span>
-                                        <span className="q-type">{room.currentQuestionIdx < 3 ? 'Knife Phase' : 'Battle Phase'}</span>
+                                        <span className={`q-type${room.overtimePhase ? ' overtime-label' : ''}`}>
+                                            {room.overtimePhase ? '⚡ SUDDEN DEATH' : room.currentQuestionIdx < 3 ? 'Knife Phase' : 'Battle Phase'}
+                                        </span>
                                     </div>
                                 </div>
                                 {/* Per-question countdown bar — only shown when question time limit is set */}
@@ -795,20 +876,24 @@ export default function Game() {
                                         </div>
                                     </div>
                                 )}
-                                <div className="q-body" dangerouslySetInnerHTML={{ __html: currentQ.description?.replace(/\n/g, '<br/>') }} />
+                                <div className="q-body">
+                                    {(currentQ.description || '').split(/\n\n+/).map((para: string, i: number) => (
+                                        <p key={i} dangerouslySetInnerHTML={{ __html: para.replace(/\n/g, '<br/>') }} />
+                                    ))}
+                                </div>
 
                                 <div className="q-section">
-                                    <h3>Input Format</h3>
-                                    <pre className="q-io-box">{currentQ.input_format || "No special input format."}</pre>
+                                    <h3><span className="q-sec-icon">→</span>Input Format</h3>
+                                    <pre className="q-io-box input-box">{currentQ.input_format || "No special input format."}</pre>
                                 </div>
                                 <div className="q-section">
-                                    <h3>Expected Output</h3>
+                                    <h3><span className="q-sec-icon">←</span>Expected Output</h3>
                                     <pre className="q-io-box expected">{currentQ.output_format || "Follow standard output format."}</pre>
                                 </div>
                                 {currentQ.constraints && (
                                     <div className="q-section">
-                                        <h3>Constraints</h3>
-                                        <pre className="q-io-box">{currentQ.constraints}</pre>
+                                        <h3><span className="q-sec-icon">⚡</span>Constraints</h3>
+                                        <pre className="q-io-box constraints-box">{currentQ.constraints}</pre>
                                     </div>
                                 )}
                                 {/* ── Hints ── */}
@@ -1235,13 +1320,23 @@ export default function Game() {
             {toast && <div className={`pro-toast ${toast.type}`}> {toast.msg} </div>}
 
             {room.phase === 'ended' && (
-                <div className="pro-end-overlay">
-                    <div className="pro-end-card">
-                        <Trophy size={80} color="#ffaa00" style={{ marginBottom: '20px' }} />
-                        <h1 className="end-title">
-                            {room.winner === 'tie' ? "DRAW" :
-                                room.winner === myTeam ? "VICTORY" : "DEFEAT"}
+                <div className={`pro-end-overlay ${room.winner === 'defeat' ? 'overtime-defeat-bg' : ''}`}>
+                    <div className={`pro-end-card ${room.winner === 'defeat' ? 'defeat-card' : ''}`}>
+                        {room.winner === 'defeat'
+                            ? <div className="end-defeat-icon">💥</div>
+                            : <Trophy size={80} color={room.winner === myTeam ? '#f59e0b' : room.winner === 'tie' ? '#94a3b8' : '#ef4444'} style={{ marginBottom: '20px' }} />
+                        }
+                        <h1 className={`end-title ${room.winner === 'defeat' ? 'loss' : room.winner === 'tie' ? 'draw' : room.winner === myTeam ? 'win' : 'loss'}`}>
+                            {room.winner === 'defeat' ? "TIME'S UP" :
+                             room.winner === 'tie' ? 'DRAW' :
+                             room.winner === myTeam ? 'VICTORY' : 'DEFEAT'}
                         </h1>
+                        {room.winner === 'defeat' && (
+                            <>
+                                <p className="end-subtitle">Overtime expired — no winner</p>
+                                <div className="end-overtime-tag">⚡ OVERTIME · BOTH DEFEATED</div>
+                            </>
+                        )}
                         <div className="end-scores">
                             <div className="es-team"><span style={{ color: TEAM_COLORS.A }}>{room.teams.A.name}</span> <strong>{room.teams.A.solved.length} solved</strong></div>
                             <div className="es-team"><span style={{ color: TEAM_COLORS.B }}>{room.teams.B.name}</span> <strong>{room.teams.B.solved.length} solved</strong></div>

@@ -13,6 +13,22 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/problems/:id  —  returns a single problem by ID (used for overtime bonus question display)
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.*,
+              (SELECT COUNT(*) FROM test_cases t WHERE t.problem_id = p.id AND t.is_sample = true) AS tc_count
+       FROM problems p WHERE p.id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ status: 'error', message: 'Problem not found' });
+    res.json({ status: 'ok', problem: rows[0] });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 // GET /api/problems/:id/testcases  —  returns only SAMPLE (visible) test cases
 router.get('/:id/testcases', async (req, res) => {
   try {

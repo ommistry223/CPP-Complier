@@ -40,6 +40,7 @@ interface Tournament {
   questionIds?: string[];
   timeLimitMinutes?: number | null;
   questionTimeLimitSeconds?: number | null;
+  overtimeTimeLimitMinutes?: number | null;
 }
 
 interface TournamentPair {
@@ -52,6 +53,7 @@ interface RoomResult {
   teamB: { name: string | null; gridCells: number; solved: number };
   phase: string;
   winner: string | null;
+  overtime?: boolean;
 }
 interface Submission {
   id: string; room_code: string; team_id: string; language: string;
@@ -343,6 +345,7 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
   const [copied, setCopied] = useState<string | null>(null);
   const [timeLimitInput, setTimeLimitInput] = useState(String(tournament.timeLimitMinutes || ''));
   const [questionTimeLimitInput, setQuestionTimeLimitInput] = useState(String(tournament.questionTimeLimitSeconds || ''));
+  const [overtimeTimeLimitInput, setOvertimeTimeLimitInput] = useState(String(tournament.overtimeTimeLimitMinutes || ''));
   const [extendInput, setExtendInput] = useState('5');
 
   const copy = async (text: string, key: string) => {
@@ -355,7 +358,8 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
     try {
       const timeLimitMinutes = timeLimitInput ? parseInt(timeLimitInput, 10) : undefined;
       const questionTimeLimitSeconds = questionTimeLimitInput ? parseInt(questionTimeLimitInput, 10) : undefined;
-      await axios.post(API(`/tournaments/${t.id}/start`), { timeLimitMinutes, questionTimeLimitSeconds });
+      const overtimeTimeLimitMinutes = overtimeTimeLimitInput ? parseInt(overtimeTimeLimitInput, 10) : 30;
+      await axios.post(API(`/tournaments/${t.id}/start`), { timeLimitMinutes, questionTimeLimitSeconds, overtimeTimeLimitMinutes });
       setT(p => ({
         ...p,
         status: 'live',
@@ -445,6 +449,17 @@ function ManageTournament({ tournament, onBack }: { tournament: Tournament; onBa
                   onChange={e => setQuestionTimeLimitInput(e.target.value)}
                   style={{ width: 120 }}
                   title="Per-question time limit in seconds (leave blank for none)"
+                />
+              </div>
+              <div className="adm-time-inline">
+                <input
+                  type="number" min="1" max="60"
+                  className="adm-input adm-input-sm"
+                  placeholder="Overtime (min)"
+                  value={overtimeTimeLimitInput}
+                  onChange={e => setOvertimeTimeLimitInput(e.target.value)}
+                  style={{ width: 120 }}
+                  title="Overtime bonus question time limit in minutes (default 30)"
                 />
               </div>
               <button className="adm-btn adm-btn-success" onClick={startTournament} disabled={starting}>
@@ -949,6 +964,7 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
     const rows = ['Rank,Room,Team A,A Cells,Team B,B Cells,Result'];
     lb.forEach(r => {
       const result = r.phase !== 'ended' ? 'Playing'
+        : r.winner === 'defeat' ? 'Both Defeated'
         : r.winner === 'tie' ? 'Draw'
         : r.winner === 'A' ? `${r.teamA.name} wins` : `${r.teamB.name} wins`;
       rows.push(`${r.rank},${r.roomCode},"${r.teamA.name || '—'}",${r.teamA.gridCells},"${r.teamB.name || '—'}",${r.teamB.gridCells},${result}`);
@@ -961,7 +977,9 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
   const resetLb = () => { setLb([]); load(); toast('Leaderboard refreshed', 'info'); };
 
   const getStatusBadge = (r: RoomResult) => {
+    if (r.overtime) return <span className="adm-badge adm-badge-overtime">⚡ Overtime</span>;
     if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
+    if (r.winner === 'defeat') return <span className="adm-badge adm-badge-defeat">💀 Both Defeated</span>;
     if (r.winner === 'tie') return <span className="adm-badge adm-badge-draw">🤝 Draw</span>;
     const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
     return <span className="adm-badge adm-badge-winner">🏆 {winName}</span>;
@@ -1015,15 +1033,17 @@ function LeaderboardTabInTournament({ tournamentId }: { tournamentId: string }) 
                     </span>
                   </td>
                   <td><span className="adm-mono">{r.roomCode}</span></td>
-                  <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                  <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : r.winner === 'defeat' ? ' adm-defeat-cell' : ''}`}>
                     {r.winner === 'A' && <span style={{ marginRight: 4 }}>👑</span>}
+                    {r.winner === 'defeat' && <span style={{ marginRight: 4 }}>💀</span>}
                     {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                   </td>
                   <td><strong>{r.teamA.solved}</strong></td>
                   <td>{r.teamA.gridCells}</td>
                   <td className="adm-vs-cell">vs</td>
-                  <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                  <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : r.winner === 'defeat' ? ' adm-defeat-cell' : ''}`}>
                     {r.winner === 'B' && <span style={{ marginRight: 4 }}>👑</span>}
+                    {r.winner === 'defeat' && <span style={{ marginRight: 4 }}>💀</span>}
                     {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
                   </td>
                   <td><strong>{r.teamB.solved}</strong></td>
@@ -1627,6 +1647,7 @@ function LeaderboardPage() {
     const rows = ['Rank,Room,Team A,A Cells,Team B,B Cells,Result'];
     lb.forEach(r => {
       const result = r.phase !== 'ended' ? 'Playing'
+        : r.winner === 'defeat' ? 'Both Defeated'
         : r.winner === 'tie' ? 'Draw'
         : r.winner === 'A' ? `${r.teamA.name} wins` : `${r.teamB.name} wins`;
       rows.push(`${r.rank},${r.roomCode},"${r.teamA.name || '—'}",${r.teamA.gridCells},"${r.teamB.name || '—'}",${r.teamB.gridCells},${result}`);
@@ -1637,7 +1658,9 @@ function LeaderboardPage() {
   };
 
   const getStatusBadge = (r: RoomResult) => {
+    if (r.overtime) return <span className="adm-badge adm-badge-overtime">⚡ Overtime</span>;
     if (r.phase !== 'ended') return <span className="adm-badge badge-live">⚔️ Playing</span>;
+    if (r.winner === 'defeat') return <span className="adm-badge adm-badge-defeat">💀 Both Defeated</span>;
     if (r.winner === 'tie') return <span className="adm-badge adm-badge-draw">🤝 Draw</span>;
     const winName = r.winner === 'A' ? r.teamA.name : r.teamB.name;
     return <span className="adm-badge adm-badge-winner">🏆 {winName}</span>;
@@ -1673,22 +1696,24 @@ function LeaderboardPage() {
             <tbody>
               {loading ? Array(6).fill(0).map((_, i) => <tr key={i}><td colSpan={10}><Skeleton h={28} /></td></tr>) :
                 lb.map(r => (
-                  <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' ? 'adm-top-row' : ''}>
+                  <tr key={r.roomCode} className={r.rank <= 3 && r.phase === 'ended' && r.winner !== 'defeat' && r.winner !== 'tie' ? 'adm-top-row' : ''}>
                     <td>
                       <span className={`adm-rank adm-rank-${r.rank}`}>
                         {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `#${r.rank}`}
                       </span>
                     </td>
                     <td><span className="adm-mono">{r.roomCode}</span></td>
-                    <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : ''}`}>
+                    <td className={`adm-team-name${r.winner === 'A' ? ' adm-winner-cell' : r.winner === 'defeat' ? ' adm-defeat-cell' : ''}`}>
                       {r.winner === 'A' && <span style={{ marginRight: 4 }}>👑</span>}
+                      {r.winner === 'defeat' && <span style={{ marginRight: 4 }}>💀</span>}
                       {r.teamA.name || <em style={{opacity:0.4}}>Waiting</em>}
                     </td>
                     <td><strong>{r.teamA.solved}</strong></td>
                     <td>{r.teamA.gridCells}</td>
                     <td className="adm-vs-cell">vs</td>
-                    <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : ''}`}>
+                    <td className={`adm-team-name${r.winner === 'B' ? ' adm-winner-cell' : r.winner === 'defeat' ? ' adm-defeat-cell' : ''}`}>
                       {r.winner === 'B' && <span style={{ marginRight: 4 }}>👑</span>}
+                      {r.winner === 'defeat' && <span style={{ marginRight: 4 }}>💀</span>}
                       {r.teamB.name || <em style={{opacity:0.4}}>Waiting</em>}
                     </td>
                     <td><strong>{r.teamB.solved}</strong></td>

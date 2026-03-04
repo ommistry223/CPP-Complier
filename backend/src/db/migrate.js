@@ -322,6 +322,16 @@ const migrations = [
   );
   CREATE INDEX IF NOT EXISTS idx_tournaments_created ON tournaments(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_tournaments_status  ON tournaments(status);
+  `,
+
+    // Migration 17: Add question_time_limit_seconds (safety idempotent add)
+    `
+  ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS question_time_limit_seconds INTEGER DEFAULT NULL;
+  `,
+
+    // Migration 18: Add overtime_time_limit_minutes for bonus question draw tiebreak
+    `
+  ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS overtime_time_limit_minutes INTEGER DEFAULT 30;
   `
 ];
 
