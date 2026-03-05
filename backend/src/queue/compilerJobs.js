@@ -6,10 +6,11 @@ const redisConfig = {
     port: parseInt(process.env.REDIS_PORT) || 6379,
     password: process.env.REDIS_PASSWORD || undefined,
     // Bull uses 3 Redis connections per queue instance.
-    // Enable keepalive so they survive long idle periods.
+    // Enable keepalive so they survive long idle periods on the LAN.
+    keepAlive: 30000,
+    connectTimeout: 10000,
     enableReadyCheck: false,
     maxRetriesPerRequest: null,
-    connectTimeout: 10000,
     lazyConnect: false,
 };
 
@@ -57,23 +58,23 @@ const enqueueCompilerJob = async (language, code, input) => {
 const submitQueue = new Queue('submit-jobs', {
     redis: redisConfig,
     defaultJobOptions: {
-        attempts:         1,
+        attempts: 1,
         removeOnComplete: true,
-        removeOnFail:     false,
-        timeout:          90000,   // 90s — covers compile + many test cases
-        backoff:          { type: 'fixed', delay: 0 },
+        removeOnFail: false,
+        timeout: 90000,   // 90s — covers compile + many test cases
+        backoff: { type: 'fixed', delay: 0 },
     },
     settings: {
-        lockDuration:    60000,
-        lockRenewTime:   15000,
+        lockDuration: 60000,
+        lockRenewTime: 15000,
         stalledInterval: 30000,
         maxStalledCount: 1,
     },
 });
 
-submitQueue.on('error',  (err)       => logger.error('Submit Queue Error:', err));
-submitQueue.on('failed', (job, err)  => logger.error(`Submit job ${job.id} failed:`, err.message));
-submitQueue.on('stalled',(job)       => logger.warn(`Submit job ${job.id} stalled!`));
+submitQueue.on('error', (err) => logger.error('Submit Queue Error:', err));
+submitQueue.on('failed', (job, err) => logger.error(`Submit job ${job.id} failed:`, err.message));
+submitQueue.on('stalled', (job) => logger.warn(`Submit job ${job.id} stalled!`));
 
 const enqueueSubmitJob = async (payload) => {
     try {

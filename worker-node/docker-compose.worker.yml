@@ -1,0 +1,85 @@
+# ══════════════════════════════════════════════════════════════════
+#  Worker Node — docker-compose.worker.yml
+#  Deploy this file on PC-2 and PC-3 (Worker Nodes ONLY).
+#  PC-1 runs the full stack (docker-compose.yml).
+#
+#  Usage:
+#    docker compose -f docker-compose.worker.yml up -d
+# ══════════════════════════════════════════════════════════════════
+
+services:
+  worker:
+    build:
+      context: ../backend
+      dockerfile: ../worker-node/Dockerfile.worker
+    environment:
+      - NODE_ENV=production
+
+      # ── Point to PC-1's Redis over the LAN ──────────────────
+      - REDIS_HOST=${REDIS_HOST}          # e.g. 192.168.1.10
+      - REDIS_PORT=${REDIS_PORT:-6380}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+      # ── Point to PC-1's PgBouncer (for test-case fetching) ──
+      - DB_HOST=${DB_HOST}               # e.g. 192.168.1.10
+      - DB_PORT=${DB_PORT:-5434}
+      - DB_NAME=${DB_NAME:-coderunner}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+      # ── Worker concurrency tuning ────────────────────────────
+      # Set based on this PC's CPU core count.
+      # Rule: WORKER_CONCURRENCY = (cores * 0.75), max 16
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-6}
+      - SUBMIT_CONCURRENCY=${SUBMIT_CONCURRENCY:-4}
+      - TC_CONCURRENCY=${TC_CONCURRENCY:-8}
+
+      # ── Execution limits ─────────────────────────────────────
+      - MAX_EXECUTION_TIME=${MAX_EXECUTION_TIME:-3000}
+      - MAX_MEMORY_MB=${MAX_MEMORY_MB:-256}
+
+      # ── Binary cache ─────────────────────────────────────────
+      - BIN_CACHE_MAX=${BIN_CACHE_MAX:-150}
+      - NODE_OPTIONS=--max-old-space-size=1024
+
+    tmpfs:
+      # Source writes and test I/O live in RAM — fast, auto-cleared on restart.
+      # exec is required so the shell can run compiled binaries here.
+      - /app/temp:size=512m,mode=1777,exec
+
+    # Persistent bin_cache — compiled binaries survive container restarts.
+    # Using a named volume (not tmpfs) so g++ work is not wasted on restart.
+    volumes:
+      - worker_bin_cache:/app/bin_cache
+
+    restart: unless-stopped
+
+    # ── Resource limits — protect the host OS ────────────────────
+    deploy:
+      resources:
+        limits:
+          # Leave 1–2 cores for OS overhead.
+          # Adjust cpus to match your PC's physical core count.
+          cpus: "${WORKER_CPU_LIMIT:-6.0}"
+          memory: "${WORKER_MEMORY_LIMIT:-4G}"
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+
+    # ── Health monitoring — restarts on crash ────────────────────
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('ioredis'); process.exit(0)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  worker_bin_cache:
+    driver: local
